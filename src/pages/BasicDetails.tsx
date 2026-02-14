@@ -1,0 +1,280 @@
+import { useState } from "react";
+import { useStore } from "@/data/store";
+import { CreditCard } from "@/types";
+import { formatCurrency, generateId } from "@/utils/formatters";
+import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "@/hooks/use-toast";
+
+const emptyCard: CreditCard = {
+  id: "", parentId: "", cardName: "", cardStatus: "Active", ownedBy: "",
+  bank: "", customerCare: "", billGenerationDay: 1, billPaymentDate: 20,
+  limitShared: false, milestoneRewards: "", generalRewards: "",
+  targetSpend: 0, annualCharges: 0, registeredNo: "", email: "",
+  annualCycleReset: "", cardLimit: 0, rewardPointsExpiry: "",
+};
+
+const BasicDetails = () => {
+  const { cards, addCard, updateCard, deleteCard } = useStore();
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
+  const [form, setForm] = useState<CreditCard>({ ...emptyCard, id: generateId() });
+  const [bankFilter, setBankFilter] = useState("");
+
+  const filtered = cards.filter((c) => {
+    const q = search.toLowerCase();
+    const matchesSearch = !q || c.cardName.toLowerCase().includes(q) || c.bank.toLowerCase().includes(q) || c.ownedBy.toLowerCase().includes(q) || c.id.toLowerCase().includes(q);
+    const matchesBank = !bankFilter || c.bank === bankFilter;
+    return matchesSearch && matchesBank;
+  });
+
+  const banks = [...new Set(cards.map((c) => c.bank))];
+
+  const openAdd = () => {
+    setEditingCard(null);
+    setForm({ ...emptyCard, id: generateId() });
+    setModalOpen(true);
+  };
+
+  const openEdit = (card: CreditCard) => {
+    setEditingCard(card);
+    setForm({ ...card });
+    setModalOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!form.cardName.trim() || !form.bank.trim()) {
+      toast({ title: "Validation Error", description: "Card Name and Bank are required.", variant: "destructive" });
+      return;
+    }
+    if (editingCard) {
+      updateCard(form);
+      toast({ title: "Card updated successfully" });
+    } else {
+      addCard(form);
+      toast({ title: "Card added successfully" });
+    }
+    setModalOpen(false);
+  };
+
+  const handleDelete = () => {
+    if (deleteId) {
+      deleteCard(deleteId);
+      toast({ title: "Card deleted" });
+      setDeleteId(null);
+    }
+  };
+
+  const setField = (key: keyof CreditCard, value: CreditCard[keyof CreditCard]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-heading text-foreground">Basic Details</h1>
+          <p className="mt-1 text-body-sm text-muted-foreground">{cards.length} cards registered</p>
+        </div>
+        <Button onClick={openAdd} className="gap-2">
+          <Plus size={16} /> Add New Card
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search cards..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <select
+          value={bankFilter}
+          onChange={(e) => setBankFilter(e.target.value)}
+          className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground"
+        >
+          <option value="">All Banks</option>
+          {banks.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        {(search || bankFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setBankFilter(""); }}>
+            <X size={14} className="mr-1" /> Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+        <table className="w-full text-body-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/50">
+              {["Card ID", "Card Name", "Bank", "Owner", "Status", "Limit", "Target", "Bill Day", "Payment Day", "Actions"].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((card) => (
+              <tr key={card.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-3 font-mono text-body-xs">{card.id}</td>
+                <td className="px-4 py-3 font-medium">{card.cardName}</td>
+                <td className="px-4 py-3">{card.bank}</td>
+                <td className="px-4 py-3">{card.ownedBy}</td>
+                <td className="px-4 py-3">
+                  <Badge variant={card.cardStatus === "Active" ? "default" : "secondary"} className={card.cardStatus === "Active" ? "bg-success text-success-foreground" : ""}>
+                    {card.cardStatus}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatCurrency(card.cardLimit)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatCurrency(card.targetSpend)}</td>
+                <td className="px-4 py-3 text-center">{card.billGenerationDay}</td>
+                <td className="px-4 py-3 text-center">{card.billPaymentDate}</td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(card)}>
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(card.id)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">No cards found</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add/Edit Modal */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingCard ? "Edit Card" : "Add New Card"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Card ID</Label>
+              <Input value={form.id} onChange={(e) => setField("id", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Card Name *</Label>
+              <Input value={form.cardName} onChange={(e) => setField("cardName", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Parent ID</Label>
+              <Input value={form.parentId} onChange={(e) => setField("parentId", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Bank *</Label>
+              <Input value={form.bank} onChange={(e) => setField("bank", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Owned By</Label>
+              <Input value={form.ownedBy} onChange={(e) => setField("ownedBy", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Customer Care</Label>
+              <Input value={form.customerCare} onChange={(e) => setField("customerCare", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Registered No.</Label>
+              <Input value={form.registeredNo} onChange={(e) => setField("registeredNo", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Card Limit (₹)</Label>
+              <Input type="number" value={form.cardLimit} onChange={(e) => setField("cardLimit", Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Target Spend (₹)</Label>
+              <Input type="number" value={form.targetSpend} onChange={(e) => setField("targetSpend", Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Annual Charges (₹)</Label>
+              <Input type="number" value={form.annualCharges} onChange={(e) => setField("annualCharges", Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Bill Generation Day</Label>
+              <Input type="number" min={1} max={31} value={form.billGenerationDay} onChange={(e) => setField("billGenerationDay", Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Bill Payment Date</Label>
+              <Input type="number" min={1} max={31} value={form.billPaymentDate} onChange={(e) => setField("billPaymentDate", Number(e.target.value))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Annual Cycle Reset</Label>
+              <Input type="date" value={form.annualCycleReset} onChange={(e) => setField("annualCycleReset", e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Reward Points Expiry</Label>
+              <Input type="date" value={form.rewardPointsExpiry} onChange={(e) => setField("rewardPointsExpiry", e.target.value)} />
+            </div>
+            <div className="flex items-center gap-3 pt-6">
+              <Switch checked={form.cardStatus === "Active"} onCheckedChange={(v) => setField("cardStatus", v ? "Active" : "Inactive")} />
+              <Label>Active</Label>
+            </div>
+            <div className="flex items-center gap-3 pt-6">
+              <Switch checked={form.limitShared} onCheckedChange={(v) => setField("limitShared", v)} />
+              <Label>Limit Shared</Label>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Milestone Rewards</Label>
+              <Input value={form.milestoneRewards} onChange={(e) => setField("milestoneRewards", e.target.value)} />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>General Rewards</Label>
+              <Input value={form.generalRewards} onChange={(e) => setField("generalRewards", e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave}>{editingCard ? "Update" : "Save"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this card and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+
+export default BasicDetails;
