@@ -68,7 +68,7 @@ const PaymentDetails = () => {
   };
 
   const computeStatus = (f: Payment): Payment["status"] => {
-    if (f.paymentPaidOn) return "Paid";
+    if (f.paidAmount > 0 && f.paidAmount >= f.paymentDue) return "Paid";
     if (f.paymentDeadline && new Date(f.paymentDeadline) < new Date()) return "Overdue";
     return "Pending";
   };
@@ -156,47 +156,81 @@ const PaymentDetails = () => {
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
-              {["Card", "Statement", "Due Amount", "Deadline", "Paid On", "Paid Amount", "Status", "Actions"].map((h) => (
+              {["Card", "Statement", "Due Amount", "Deadline", "Paid On", "Paid Amount", "Status", "Notes", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p) => (
-              <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3">
-                  <div>
-                    <p className="font-medium">{p.cardName}</p>
-                    <p className="text-body-xs text-muted-foreground">{p.cardId}</p>
-                  </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">{formatDate(p.statementDate)}</td>
-                <td className="px-4 py-3 whitespace-nowrap font-medium">{formatCurrency(p.paymentDue)}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{formatDate(p.paymentDeadline)}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{p.paymentPaidOn ? formatDate(p.paymentPaidOn) : "—"}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{p.paidAmount ? formatCurrency(p.paidAmount) : "—"}</td>
-                <td className="px-4 py-3">
-                  <Badge className={statusStyles[p.status]}>{p.status}</Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1">
-                    {p.status !== "Paid" && (
-                      <Button variant="ghost" size="sm" className="h-8 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>
-                        Mark Paid
+            {filtered.map((p) => {
+              const displayStatus = computeStatus(p);
+              return (
+                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3">
+                    <div>
+                      <p className="font-medium">{p.cardName}</p>
+                      <p className="text-body-xs text-muted-foreground">{p.cardId}</p>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Input type="date" value={p.statementDate} className="h-8 w-[130px]"
+                      onChange={(e) => updatePayment({ ...p, statementDate: e.target.value, status: computeStatus({ ...p, statementDate: e.target.value }) })} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Input type="number" value={p.paymentDue} className="h-8 w-[100px]"
+                      onChange={(e) => {
+                        const updated = { ...p, paymentDue: Number(e.target.value) };
+                        updatePayment({ ...updated, status: computeStatus(updated) });
+                      }} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Input type="date" value={p.paymentDeadline} className="h-8 w-[130px]"
+                      onChange={(e) => {
+                        const updated = { ...p, paymentDeadline: e.target.value };
+                        updatePayment({ ...updated, status: computeStatus(updated) });
+                      }} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[130px]"
+                      onChange={(e) => {
+                        const updated = { ...p, paymentPaidOn: e.target.value || null };
+                        updatePayment({ ...updated, status: computeStatus(updated) });
+                      }} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Input type="number" value={p.paidAmount} className="h-8 w-[100px]"
+                      onChange={(e) => {
+                        const updated = { ...p, paidAmount: Number(e.target.value) };
+                        updatePayment({ ...updated, status: computeStatus(updated) });
+                      }} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge className={statusStyles[displayStatus]}>{displayStatus}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Input value={p.notes} className="h-8 w-[120px]" placeholder="—"
+                      onChange={(e) => updatePayment({ ...p, notes: e.target.value })} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      {displayStatus !== "Paid" && (
+                        <Button variant="ghost" size="sm" className="h-8 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>
+                          Mark Paid
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}>
+                        <Pencil size={14} />
                       </Button>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}>
-                      <Pencil size={14} />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}>
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}>
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">No payments found</td></tr>
+              <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">No payments found</td></tr>
             )}
           </tbody>
         </table>
