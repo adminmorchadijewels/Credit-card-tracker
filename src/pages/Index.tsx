@@ -1,8 +1,9 @@
+import { useState, useMemo } from "react";
 import { useStore } from "@/data/store";
 import { formatCurrency } from "@/utils/formatters";
-import { getCurrentFinancialYear } from "@/utils/dateHelpers";
+import { getFinancialYearMonths } from "@/utils/dateHelpers";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { Wallet, CreditCard, AlertTriangle, Star, TrendingUp, Target } from "lucide-react";
+import { Wallet, CreditCard, AlertTriangle, Star, TrendingUp, Target, CalendarDays, CheckCircle2, XCircle } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -16,9 +17,28 @@ const CHART_COLORS = [
   "hsl(200, 70%, 50%)",
 ];
 
+const getFYOptions = () => {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+  const options = [];
+  for (let y = startYear; y >= startYear - 4; y--) {
+    options.push({ label: `FY ${y}-${(y + 1).toString().slice(2)}`, startYear: y });
+  }
+  return options;
+};
+
+const getFYRange = (startYear: number) => ({
+  start: new Date(startYear, 3, 1),
+  end: new Date(startYear + 1, 2, 31),
+  label: `FY ${startYear}-${(startYear + 1).toString().slice(2)}`,
+});
+
 const Dashboard = () => {
   const { cards, payments } = useStore();
-  const fy = getCurrentFinancialYear();
+  const fyOptions = useMemo(() => getFYOptions(), []);
+  const [selectedFYYear, setSelectedFYYear] = useState(fyOptions[0].startYear);
+  const fy = useMemo(() => getFYRange(selectedFYYear), [selectedFYYear]);
 
   const fyPayments = payments.filter((p) => {
     const d = new Date(p.statementDate);
@@ -55,7 +75,7 @@ const Dashboard = () => {
     });
 
   // Monthly trend
-  const months = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+  const months = getFinancialYearMonths();
   const monthlyTrend = months.map((m, i) => {
     const monthIdx = (i + 3) % 12;
     const yearOffset = monthIdx < 3 ? 1 : 0;
@@ -83,14 +103,42 @@ const Dashboard = () => {
       return { name: card.cardName, utilization, limit: card.cardLimit };
     });
 
+  // Statement timeline - which months have/don't have statements per card
+  const activeCardsForTimeline = cards.filter((c) => c.cardStatus === "Active");
+  const now = new Date();
+  const timelineData = activeCardsForTimeline.map((card) => {
+    const monthStatuses = months.map((m, i) => {
+      const monthIdx = (i + 3) % 12;
+      const yearOffset = monthIdx < 3 ? 1 : 0;
+      const year = fy.start.getFullYear() + yearOffset;
+      const monthDate = new Date(year, monthIdx, 1);
+      const isFuture = monthDate > now;
+      const hasStatement = fyPayments.some((p) => {
+        const d = new Date(p.statementDate);
+        return p.cardId === card.id && d.getMonth() === monthIdx && d.getFullYear() === year;
+      });
+      return { month: m, hasStatement, isFuture };
+    });
+    return { cardName: card.cardName, cardId: card.id, months: monthStatuses };
+  });
+
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Header */}
+      {/* Header with FY selector */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-heading text-foreground">Dashboard</h1>
           <p className="mt-1 text-body-sm text-muted-foreground">{fy.label} • Financial Overview</p>
         </div>
+        <select
+          value={selectedFYYear}
+          onChange={(e) => setSelectedFYYear(Number(e.target.value))}
+          className="h-10 rounded-lg border border-input bg-card px-4 text-body-sm font-medium text-foreground"
+        >
+          {fyOptions.map((opt) => (
+            <option key={opt.startYear} value={opt.startYear}>{opt.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Metric Cards */}
@@ -125,6 +173,50 @@ const Dashboard = () => {
           icon={<Star size={22} />}
           accent="secondary"
         />
+      </div>
+
+      {/* Statement Timeline */}
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <CalendarDays size={18} className="text-primary" />
+          <h3 className="text-base font-semibold text-card-foreground">Statement Timeline</h3>
+          <span className="ml-2 text-body-xs text-muted-foreground">Missing statements highlighted</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-body-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground w-[160px]">Card</th>
+                {months.map((m) => (
+                  <th key={m} className="px-2 py-2 text-center font-semibold text-muted-foreground text-body-xs">{m}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {timelineData.map((card, i) => (
+                <tr key={card.cardId} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2.5 font-medium text-foreground">{card.cardName}</td>
+                  {card.months.map((ms, j) => (
+                    <td key={j} className="px-2 py-2.5 text-center">
+                      {ms.isFuture ? (
+                        <span className="inline-block h-5 w-5 rounded-full bg-muted" />
+                      ) : ms.hasStatement ? (
+                        <CheckCircle2 size={18} className="inline-block text-success" />
+                      ) : (
+                        <XCircle size={18} className="inline-block text-destructive" />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-3 flex items-center gap-4 text-body-xs text-muted-foreground">
+          <span className="flex items-center gap-1"><CheckCircle2 size={14} className="text-success" /> Statement added</span>
+          <span className="flex items-center gap-1"><XCircle size={14} className="text-destructive" /> Missing</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-3.5 w-3.5 rounded-full bg-muted" /> Future</span>
+        </div>
       </div>
 
       {/* Charts Row 1 */}

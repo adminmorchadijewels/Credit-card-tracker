@@ -125,7 +125,7 @@ const BasicDetails = () => {
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
-              {["Card ID", "Card Name", "Bank", "Owner", "Status", "Limit", "Target", "Bill Day", "Payment Day", "Actions"].map((h) => (
+              {["Card ID", "Card Name", "Bank", "Owner", "Status", "Limit", "Target", "Bill Gen Day", "Bill Pay Day", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -221,7 +221,7 @@ const BasicDetails = () => {
               <Input type="number" min={1} max={31} value={form.billGenerationDay} onChange={(e) => setField("billGenerationDay", Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Bill Payment Date</Label>
+              <Label>Bill Payment Day</Label>
               <Input type="number" min={1} max={31} value={form.billPaymentDate} onChange={(e) => setField("billPaymentDate", Number(e.target.value))} />
             </div>
             <div className="space-y-2">
@@ -230,7 +230,7 @@ const BasicDetails = () => {
             </div>
             <div className="space-y-2">
               <Label>Reward Points Expiry</Label>
-              <Input type="date" value={form.rewardPointsExpiry} onChange={(e) => setField("rewardPointsExpiry", e.target.value)} />
+              <Input value={form.rewardPointsExpiry} onChange={(e) => setField("rewardPointsExpiry", e.target.value)} placeholder="e.g. 2 years from issue" />
             </div>
             <div className="flex items-center gap-3 pt-6">
               <Switch checked={form.cardStatus === "Active"} onCheckedChange={(v) => setField("cardStatus", v ? "Active" : "Inactive")} />
