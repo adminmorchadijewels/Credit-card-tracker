@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useStore } from "@/data/store";
-import { Payment } from "@/types";
+import { Payment, Transaction } from "@/types";
 import { formatCurrency, formatDate, generateId } from "@/utils/formatters";
-import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const statusStyles: Record<string, string> = {
   Paid: "bg-success text-success-foreground",
@@ -23,26 +24,27 @@ const statusStyles: Record<string, string> = {
   Overdue: "bg-overdue text-overdue-foreground",
 };
 
+const TRANSACTION_CATEGORIES = ["Travel", "Dining", "Shopping", "Groceries", "Fuel", "Bills", "Entertainment", "Health", "Education", "Other"];
+
 const PaymentDetails = () => {
-  const { cards, payments, addPayment, updatePayment, deletePayment } = useStore();
+  const { cards, payments, addPayment, updatePayment, deletePayment, addTransaction, updateTransaction, deleteTransaction } = useStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [cardFilter, setCardFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [expandedPayment, setExpandedPayment] = useState<string | null>(null);
+  const [txnForm, setTxnForm] = useState<Transaction>({ id: "", paymentId: "", date: "", category: "Other", amount: 0, remark: "" });
+  const [txnModalOpen, setTxnModalOpen] = useState(false);
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
 
   const emptyPayment: Payment = {
-    id: generateId(),
-    cardId: cards[0]?.id || "",
-    cardName: cards[0]?.cardName || "",
-    statementDate: "",
-    paymentDue: 0,
-    paymentDeadline: "",
-    paymentPaidOn: null,
-    paidAmount: 0,
-    status: "Pending",
-    notes: "",
+    id: generateId(), cardId: cards[0]?.id || "", cardName: cards[0]?.cardName || "",
+    statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
+    paidAmount: 0, status: "Pending", notes: "", transactions: [],
   };
 
   const [form, setForm] = useState<Payment>(emptyPayment);
@@ -50,10 +52,16 @@ const PaymentDetails = () => {
   const filtered = payments.filter((p) => {
     const q = search.toLowerCase();
     const matchSearch = !q || p.cardName.toLowerCase().includes(q) || p.cardId.toLowerCase().includes(q);
-    const matchStatus = !statusFilter || p.status === statusFilter;
+    const matchStatus = !statusFilter || computeStatus(p) === statusFilter;
     const matchCard = !cardFilter || p.cardId === cardFilter;
     return matchSearch && matchStatus && matchCard;
   }).sort((a, b) => new Date(b.statementDate).getTime() - new Date(a.statementDate).getTime());
+
+  function computeStatus(f: Payment): Payment["status"] {
+    if (f.paidAmount > 0 && f.paidAmount >= f.paymentDue) return "Paid";
+    if (f.paymentDeadline && new Date(f.paymentDeadline) < new Date()) return "Overdue";
+    return "Pending";
+  }
 
   const openAdd = () => {
     setEditingPayment(null);
@@ -65,12 +73,6 @@ const PaymentDetails = () => {
     setEditingPayment(p);
     setForm({ ...p });
     setModalOpen(true);
-  };
-
-  const computeStatus = (f: Payment): Payment["status"] => {
-    if (f.paidAmount > 0 && f.paidAmount >= f.paymentDue) return "Paid";
-    if (f.paymentDeadline && new Date(f.paymentDeadline) < new Date()) return "Overdue";
-    return "Pending";
   };
 
   const handleSave = () => {
@@ -108,6 +110,58 @@ const PaymentDetails = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleFileUpload = async (paymentId: string, file: File) => {
+    setUploadingFor(paymentId);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${paymentId}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("statements").upload(path, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("statements").getPublicUrl(path);
+      const payment = payments.find((p) => p.id === paymentId);
+      if (payment) {
+        updatePayment({ ...payment, statementFileUrl: urlData.publicUrl, statementFileName: file.name });
+      }
+      toast({ title: "Statement uploaded" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploadingFor(null);
+    }
+  };
+
+  const openTxnAdd = (paymentId: string) => {
+    setEditingTxn(null);
+    setTxnForm({ id: generateId(), paymentId, date: "", category: "Other", amount: 0, remark: "" });
+    setTxnModalOpen(true);
+  };
+
+  const openTxnEdit = (txn: Transaction) => {
+    setEditingTxn(txn);
+    setTxnForm({ ...txn });
+    setTxnModalOpen(true);
+  };
+
+  const handleTxnSave = () => {
+    if (!txnForm.date || txnForm.amount <= 0) {
+      toast({ title: "Validation Error", description: "Date and Amount are required.", variant: "destructive" });
+      return;
+    }
+    if (editingTxn) {
+      updateTransaction(txnForm.paymentId, txnForm);
+      toast({ title: "Transaction updated" });
+    } else {
+      addTransaction(txnForm.paymentId, txnForm);
+      toast({ title: "Transaction added" });
+    }
+    setTxnModalOpen(false);
+  };
+
+  const getUndefinedAmount = (p: Payment) => {
+    const txnTotal = (p.transactions || []).reduce((s, t) => s + t.amount, 0);
+    return Math.max(0, p.paymentDue - txnTotal);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -126,21 +180,13 @@ const PaymentDetails = () => {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search payments..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground"
-        >
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
           <option value="">All Status</option>
           <option value="Paid">Paid</option>
           <option value="Pending">Pending</option>
           <option value="Overdue">Overdue</option>
         </select>
-        <select
-          value={cardFilter}
-          onChange={(e) => setCardFilter(e.target.value)}
-          className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground"
-        >
+        <select value={cardFilter} onChange={(e) => setCardFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
           <option value="">All Cards</option>
           {cards.map((c) => <option key={c.id} value={c.id}>{c.cardName}</option>)}
         </select>
@@ -156,7 +202,7 @@ const PaymentDetails = () => {
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
-              {["Card", "Statement", "Due Amount", "Deadline", "Paid On", "Paid Amount", "Status", "Notes", "Actions"].map((h) => (
+              {["", "Card", "Statement", "Due Amount", "Deadline", "Paid On", "Paid Amount", "Status", "Statement File", "Notes", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -164,79 +210,167 @@ const PaymentDetails = () => {
           <tbody>
             {filtered.map((p) => {
               const displayStatus = computeStatus(p);
+              const isExpanded = expandedPayment === p.id;
+              const txns = p.transactions || [];
+              const undefinedAmt = getUndefinedAmount(p);
               return (
-                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium">{p.cardName}</p>
-                      <p className="text-body-xs text-muted-foreground">{p.cardId}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Input type="date" value={p.statementDate} className="h-8 w-[130px]"
-                      onChange={(e) => updatePayment({ ...p, statementDate: e.target.value, status: computeStatus({ ...p, statementDate: e.target.value }) })} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Input type="number" value={p.paymentDue} className="h-8 w-[100px]"
-                      onChange={(e) => {
-                        const updated = { ...p, paymentDue: Number(e.target.value) };
-                        updatePayment({ ...updated, status: computeStatus(updated) });
-                      }} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Input type="date" value={p.paymentDeadline} className="h-8 w-[130px]"
-                      onChange={(e) => {
-                        const updated = { ...p, paymentDeadline: e.target.value };
-                        updatePayment({ ...updated, status: computeStatus(updated) });
-                      }} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[130px]"
-                      onChange={(e) => {
-                        const updated = { ...p, paymentPaidOn: e.target.value || null };
-                        updatePayment({ ...updated, status: computeStatus(updated) });
-                      }} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Input type="number" value={p.paidAmount} className="h-8 w-[100px]"
-                      onChange={(e) => {
-                        const updated = { ...p, paidAmount: Number(e.target.value) };
-                        updatePayment({ ...updated, status: computeStatus(updated) });
-                      }} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge className={statusStyles[displayStatus]}>{displayStatus}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Input value={p.notes} className="h-8 w-[120px]" placeholder="—"
-                      onChange={(e) => updatePayment({ ...p, notes: e.target.value })} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      {displayStatus !== "Paid" && (
-                        <Button variant="ghost" size="sm" className="h-8 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>
-                          Mark Paid
+                <>
+                  <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setExpandedPayment(isExpanded ? null : p.id)}>
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </Button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-medium">{p.cardName}</p>
+                        <p className="text-body-xs text-muted-foreground">{p.cardId}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input type="date" value={p.statementDate} className="h-8 w-[130px]"
+                        onChange={(e) => { const u = { ...p, statementDate: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input type="number" value={p.paymentDue} className="h-8 w-[100px]"
+                        onChange={(e) => { const u = { ...p, paymentDue: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input type="date" value={p.paymentDeadline} className="h-8 w-[130px]"
+                        onChange={(e) => { const u = { ...p, paymentDeadline: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[130px]"
+                        onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input type="number" value={p.paidAmount} className="h-8 w-[100px]"
+                        onChange={(e) => { const u = { ...p, paidAmount: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge className={statusStyles[displayStatus]}>{displayStatus}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.statementFileName ? (
+                        <a href={p.statementFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline text-body-xs">
+                          <FileText size={14} /> {p.statementFileName}
+                        </a>
+                      ) : (
+                        <Button variant="outline" size="sm" className="h-7 text-body-xs gap-1" disabled={uploadingFor === p.id}
+                          onClick={() => { setUploadingFor(p.id); fileInputRef.current?.click(); }}>
+                          <Upload size={12} /> {uploadingFor === p.id ? "Uploading..." : "Upload"}
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}>
-                        <Pencil size={14} />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}>
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input value={p.notes} className="h-8 w-[120px]" placeholder="—"
+                        onChange={(e) => updatePayment({ ...p, notes: e.target.value })} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        {displayStatus !== "Paid" && (
+                          <Button variant="ghost" size="sm" className="h-8 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>
+                            Mark Paid
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}>
+                          <Pencil size={14} />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}>
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${p.id}-txns`} className="border-b border-border bg-muted/10">
+                      <td colSpan={11} className="px-8 py-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-body-sm font-semibold text-foreground">Transactions</h4>
+                          <div className="flex items-center gap-3">
+                            {undefinedAmt > 0 && (
+                              <span className="text-body-xs text-muted-foreground">
+                                Unaccounted: <strong className="text-warning">{formatCurrency(undefinedAmt)}</strong>
+                              </span>
+                            )}
+                            <Button variant="outline" size="sm" className="gap-1" onClick={() => openTxnAdd(p.id)}>
+                              <Plus size={12} /> Add Transaction
+                            </Button>
+                          </div>
+                        </div>
+                        {txns.length > 0 ? (
+                          <table className="w-full text-body-xs">
+                            <thead>
+                              <tr className="border-b border-border">
+                                {["Date", "Category", "Amount", "Remark", "Actions"].map((h) => (
+                                  <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {txns.map((t) => (
+                                <tr key={t.id} className="border-b border-border last:border-0">
+                                  <td className="px-3 py-2">{formatDate(t.date)}</td>
+                                  <td className="px-3 py-2">
+                                    <Badge variant="outline" className="text-body-xs">{t.category}</Badge>
+                                  </td>
+                                  <td className="px-3 py-2">{formatCurrency(t.amount)}</td>
+                                  <td className="px-3 py-2 text-muted-foreground">{t.remark || "—"}</td>
+                                  <td className="px-3 py-2">
+                                    <div className="flex gap-1">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openTxnEdit(t)}>
+                                        <Pencil size={12} />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => { deleteTransaction(p.id, t.id); toast({ title: "Transaction deleted" }); }}>
+                                        <Trash2 size={12} />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                              {undefinedAmt > 0 && (
+                                <tr className="bg-warning/5">
+                                  <td className="px-3 py-2 text-muted-foreground">—</td>
+                                  <td className="px-3 py-2"><Badge variant="outline" className="text-body-xs">Other</Badge></td>
+                                  <td className="px-3 py-2 font-medium text-warning">{formatCurrency(undefinedAmt)}</td>
+                                  <td className="px-3 py-2 text-muted-foreground italic">Unaccounted amount</td>
+                                  <td className="px-3 py-2" />
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <p className="text-body-xs text-muted-foreground py-4 text-center">
+                            No transactions defined. Total amount ({formatCurrency(p.paymentDue)}) categorized as "Other".
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="py-12 text-center text-muted-foreground">No payments found</td></tr>
+              <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">No payments found</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".pdf,.doc,.docx,.xls,.xlsx"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && uploadingFor) handleFileUpload(uploadingFor, file);
+          e.target.value = "";
+        }}
+      />
+
+      {/* Add/Edit Payment Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -245,14 +379,8 @@ const PaymentDetails = () => {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label>Card *</Label>
-              <select
-                value={form.cardId}
-                onChange={(e) => {
-                  const card = cards.find((c) => c.id === e.target.value);
-                  setForm((prev) => ({ ...prev, cardId: e.target.value, cardName: card?.cardName || "" }));
-                }}
-                className="w-full h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground"
-              >
+              <select value={form.cardId} onChange={(e) => { const card = cards.find((c) => c.id === e.target.value); setForm((prev) => ({ ...prev, cardId: e.target.value, cardName: card?.cardName || "" })); }}
+                className="w-full h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
                 <option value="">Select card</option>
                 {cards.map((c) => <option key={c.id} value={c.id}>{c.cardName}</option>)}
               </select>
@@ -289,6 +417,42 @@ const PaymentDetails = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button onClick={handleSave}>{editingPayment ? "Update" : "Save"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transaction Modal */}
+      <Dialog open={txnModalOpen} onOpenChange={setTxnModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingTxn ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Date *</Label>
+                <Input type="date" value={txnForm.date} onChange={(e) => setTxnForm((prev) => ({ ...prev, date: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <select value={txnForm.category} onChange={(e) => setTxnForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="w-full h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
+                  {TRANSACTION_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (₹) *</Label>
+              <Input type="number" value={txnForm.amount} onChange={(e) => setTxnForm((prev) => ({ ...prev, amount: Number(e.target.value) }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Remark</Label>
+              <Input value={txnForm.remark} onChange={(e) => setTxnForm((prev) => ({ ...prev, remark: e.target.value }))} placeholder="Optional" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTxnModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleTxnSave}>{editingTxn ? "Update" : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

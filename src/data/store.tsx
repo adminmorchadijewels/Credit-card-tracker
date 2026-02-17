@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { CreditCard, Payment } from "@/types";
+import { CreditCard, Payment, Transaction } from "@/types";
 import { sampleCards, samplePayments } from "./sampleData";
 
 interface StoreContextType {
@@ -11,6 +11,9 @@ interface StoreContextType {
   addPayment: (payment: Payment) => void;
   updatePayment: (payment: Payment) => void;
   deletePayment: (id: string) => void;
+  addTransaction: (paymentId: string, transaction: Transaction) => void;
+  updateTransaction: (paymentId: string, transaction: Transaction) => void;
+  deleteTransaction: (paymentId: string, transactionId: string) => void;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -39,8 +42,26 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const updatePayment = (payment: Payment) => setPayments((prev) => prev.map((p) => (p.id === payment.id ? payment : p)));
   const deletePayment = (id: string) => setPayments((prev) => prev.filter((p) => p.id !== id));
 
+  const addTransaction = (paymentId: string, transaction: Transaction) => {
+    setPayments((prev) => prev.map((p) =>
+      p.id === paymentId ? { ...p, transactions: [...(p.transactions || []), transaction] } : p
+    ));
+  };
+
+  const updateTransaction = (paymentId: string, transaction: Transaction) => {
+    setPayments((prev) => prev.map((p) =>
+      p.id === paymentId ? { ...p, transactions: (p.transactions || []).map((t) => t.id === transaction.id ? transaction : t) } : p
+    ));
+  };
+
+  const deleteTransaction = (paymentId: string, transactionId: string) => {
+    setPayments((prev) => prev.map((p) =>
+      p.id === paymentId ? { ...p, transactions: (p.transactions || []).filter((t) => t.id !== transactionId) } : p
+    ));
+  };
+
   return (
-    <StoreContext.Provider value={{ cards, payments, addCard, updateCard, deleteCard, addPayment, updatePayment, deletePayment }}>
+    <StoreContext.Provider value={{ cards, payments, addCard, updateCard, deleteCard, addPayment, updatePayment, deletePayment, addTransaction, updateTransaction, deleteTransaction }}>
       {children}
     </StoreContext.Provider>
   );
