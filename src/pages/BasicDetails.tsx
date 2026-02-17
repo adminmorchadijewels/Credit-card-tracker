@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useStore } from "@/data/store";
-import { CreditCard } from "@/types";
+import { CreditCard, TargetMilestone } from "@/types";
 import { formatCurrency, generateId } from "@/utils/formatters";
 import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,13 +16,15 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 const emptyCard: CreditCard = {
   id: "", parentId: "", cardName: "", cardStatus: "Active", ownedBy: "",
   bank: "", customerCare: "", billGenerationDay: 1, billPaymentDate: 20,
   limitShared: false, milestoneRewards: "", generalRewards: "",
-  targetSpend: 0, annualCharges: 0, registeredNo: "", email: "",
-  annualCycleReset: "", cardLimit: 0, rewardPointsExpiry: "",
+  targetMilestones: [{ spend: 0, reward: "" }],
+  annualCharges: 0, registeredNo: "", email: "",
+  annualCycleReset: "", cardLimit: 0, rewardPointsExpiryDays: 365,
 };
 
 const BasicDetails = () => {
@@ -82,6 +84,35 @@ const BasicDetails = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const updateMilestone = (index: number, field: keyof TargetMilestone, value: string | number) => {
+    setForm((prev) => {
+      const milestones = [...prev.targetMilestones];
+      milestones[index] = { ...milestones[index], [field]: value };
+      return { ...prev, targetMilestones: milestones };
+    });
+  };
+
+  const addMilestone = () => {
+    setForm((prev) => ({
+      ...prev,
+      targetMilestones: [...prev.targetMilestones, { spend: 0, reward: "" }],
+    }));
+  };
+
+  const removeMilestone = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      targetMilestones: prev.targetMilestones.filter((_, i) => i !== index),
+    }));
+  };
+
+  const getTopTarget = (card: CreditCard) => {
+    const milestones = card.targetMilestones || [];
+    if (milestones.length === 0) return "—";
+    const top = milestones.reduce((max, m) => m.spend > max.spend ? m : max, milestones[0]);
+    return formatCurrency(top.spend);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -98,18 +129,9 @@ const BasicDetails = () => {
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search cards..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Search cards..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <select
-          value={bankFilter}
-          onChange={(e) => setBankFilter(e.target.value)}
-          className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground"
-        >
+        <select value={bankFilter} onChange={(e) => setBankFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
           <option value="">All Banks</option>
           {banks.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
@@ -125,7 +147,7 @@ const BasicDetails = () => {
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
-              {["Card ID", "Card Name", "Bank", "Owner", "Status", "Limit", "Target", "Bill Gen Day", "Bill Pay Day", "Actions"].map((h) => (
+              {["Card ID", "Card Name", "Bank", "Owner", "Status", "Limit", "Top Target", "Expiry (days)", "Bill Gen Day", "Bill Pay Day", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -143,7 +165,8 @@ const BasicDetails = () => {
                   </Badge>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">{formatCurrency(card.cardLimit)}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{formatCurrency(card.targetSpend)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{getTopTarget(card)}</td>
+                <td className="px-4 py-3 text-center">{card.rewardPointsExpiryDays}</td>
                 <td className="px-4 py-3 text-center">{card.billGenerationDay}</td>
                 <td className="px-4 py-3 text-center">{card.billPaymentDate}</td>
                 <td className="px-4 py-3">
@@ -159,7 +182,7 @@ const BasicDetails = () => {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">No cards found</td></tr>
+              <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">No cards found</td></tr>
             )}
           </tbody>
         </table>
@@ -209,8 +232,8 @@ const BasicDetails = () => {
               <Input type="number" value={form.cardLimit} onChange={(e) => setField("cardLimit", Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label>Target Spend (₹)</Label>
-              <Input type="number" value={form.targetSpend} onChange={(e) => setField("targetSpend", Number(e.target.value))} />
+              <Label>Reward Points Expiry (days)</Label>
+              <Input type="number" value={form.rewardPointsExpiryDays} onChange={(e) => setField("rewardPointsExpiryDays", Number(e.target.value))} placeholder="e.g. 365" />
             </div>
             <div className="space-y-2">
               <Label>Annual Charges (₹)</Label>
@@ -228,10 +251,6 @@ const BasicDetails = () => {
               <Label>Annual Cycle Reset</Label>
               <Input type="date" value={form.annualCycleReset} onChange={(e) => setField("annualCycleReset", e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Reward Points Expiry</Label>
-              <Input value={form.rewardPointsExpiry} onChange={(e) => setField("rewardPointsExpiry", e.target.value)} placeholder="e.g. 2 years from issue" />
-            </div>
             <div className="flex items-center gap-3 pt-6">
               <Switch checked={form.cardStatus === "Active"} onCheckedChange={(v) => setField("cardStatus", v ? "Active" : "Inactive")} />
               <Label>Active</Label>
@@ -240,13 +259,42 @@ const BasicDetails = () => {
               <Switch checked={form.limitShared} onCheckedChange={(v) => setField("limitShared", v)} />
               <Label>Limit Shared</Label>
             </div>
+
+            {/* Target Milestones */}
+            <div className="col-span-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Target Milestones</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addMilestone} className="gap-1">
+                  <Plus size={14} /> Add Level
+                </Button>
+              </div>
+              {form.targetMilestones.map((m, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-body-xs">Spend (₹)</Label>
+                    <Input type="number" value={m.spend} onChange={(e) => updateMilestone(i, "spend", Number(e.target.value))} />
+                  </div>
+                  <div className="flex-[2] space-y-1">
+                    <Label className="text-body-xs">Reward</Label>
+                    <Input value={m.reward} onChange={(e) => updateMilestone(i, "reward", e.target.value)} placeholder="e.g. 5X points + lounge access" />
+                  </div>
+                  {form.targetMilestones.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive mt-5" onClick={() => removeMilestone(i)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Rich Text Editors */}
             <div className="col-span-2 space-y-2">
               <Label>Milestone Rewards</Label>
-              <Input value={form.milestoneRewards} onChange={(e) => setField("milestoneRewards", e.target.value)} />
+              <RichTextEditor value={form.milestoneRewards} onChange={(v) => setField("milestoneRewards", v)} />
             </div>
             <div className="col-span-2 space-y-2">
               <Label>General Rewards</Label>
-              <Input value={form.generalRewards} onChange={(e) => setField("generalRewards", e.target.value)} />
+              <RichTextEditor value={form.generalRewards} onChange={(v) => setField("generalRewards", v)} />
             </div>
           </div>
           <DialogFooter>
@@ -261,15 +309,11 @@ const BasicDetails = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Card?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this card and cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will permanently delete this card and cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Delete
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
