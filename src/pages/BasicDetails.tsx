@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useStore } from "@/data/store";
 import { CreditCard, TargetMilestone } from "@/types";
 import { formatCurrency, generateId } from "@/utils/formatters";
-import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Download, Upload, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  exportCardsCSV,
+  downloadCardsSample,
+  importCardsCSV,
+} from "@/lib/import-export";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -35,6 +40,7 @@ const BasicDetails = () => {
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
   const [form, setForm] = useState<CreditCard>({ ...emptyCard, id: generateId() });
   const [bankFilter, setBankFilter] = useState("");
+  const importRef = useRef<HTMLInputElement>(null);
 
   if (loading) {
     return (
@@ -91,6 +97,25 @@ const BasicDetails = () => {
     }
   };
 
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const csv = ev.target?.result as string;
+      const { cards: imported, errors } = importCardsCSV(csv);
+      if (errors.length > 0) {
+        toast({ title: "Import errors", description: errors.join("\n"), variant: "destructive" });
+      }
+      imported.forEach((card) => addCard(card));
+      if (imported.length > 0) {
+        toast({ title: `Imported ${imported.length} card${imported.length !== 1 ? "s" : ""}` });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const setField = (key: keyof CreditCard, value: CreditCard[keyof CreditCard]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -131,9 +156,21 @@ const BasicDetails = () => {
           <h1 className="text-heading text-foreground">Basic Details</h1>
           <p className="mt-1 text-body-sm text-muted-foreground">{cards.length} cards registered</p>
         </div>
-        <Button onClick={openAdd} className="gap-2">
-          <Plus size={16} /> Add New Card
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportCardsCSV(cards)}>
+            <Download size={14} /> Export CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={downloadCardsSample}>
+            <FileDown size={14} /> Sample CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => importRef.current?.click()}>
+            <Upload size={14} /> Import CSV
+          </Button>
+          <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+          <Button onClick={openAdd} className="gap-2">
+            <Plus size={16} /> Add New Card
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

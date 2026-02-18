@@ -96,7 +96,7 @@ const AuthPage = () => {
           <div className="mx-auto h-12 w-12 rounded-xl bg-primary flex items-center justify-center shadow-md">
             <CreditCard size={24} className="text-primary-foreground" />
           </div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight">CardTrack</h1>
+          <h1 className="text-xl font-bold text-foreground tracking-tight">FinTrack</h1>
           <p className="text-body-sm text-muted-foreground">
             {mode === "login" ? "Sign in to your account" : "Create a new account"}
           </p>

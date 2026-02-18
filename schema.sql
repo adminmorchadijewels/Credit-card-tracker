@@ -243,3 +243,47 @@ CREATE POLICY "Users can access own statement chunks"
   ON statement_chunks FOR ALL
   USING (payment_id IN (SELECT id FROM payments WHERE user_id = auth.uid()))
   WITH CHECK (payment_id IN (SELECT id FROM payments WHERE user_id = auth.uid()));
+
+-- ============================================================
+-- Auto-backup snapshots (migration 4)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.backups (
+  id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID         NOT NULL DEFAULT auth.uid(),
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  cards_count    INT          NOT NULL DEFAULT 0,
+  payments_count INT          NOT NULL DEFAULT 0,
+  snapshot       JSONB        NOT NULL DEFAULT '{}'
+);
+
+ALTER TABLE public.backups ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage own backups"
+  ON public.backups FOR ALL
+  USING  (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS backups_user_created_idx
+  ON public.backups (user_id, created_at DESC);
+
+-- Prune trigger: keeps only the 30 most recent backups per user
+CREATE OR REPLACE FUNCTION public.prune_old_backups()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  DELETE FROM public.backups
+  WHERE user_id = NEW.user_id
+    AND id NOT IN (
+      SELECT id FROM public.backups
+      WHERE user_id = NEW.user_id
+      ORDER BY created_at DESC
+      LIMIT 30
+    );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_prune_backups ON public.backups;
+CREATE TRIGGER trg_prune_backups
+  AFTER INSERT ON public.backups
+  FOR EACH ROW EXECUTE FUNCTION public.prune_old_backups();

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Card background -->
+  <rect x="4" y="14" width="56" height="36" rx="7" fill="#6366f1"/>
+  <!-- Magnetic stripe -->
+  <rect x="4" y="22" width="56" height="8" fill="#4f46e5"/>
+  <!-- Chip -->
+  <rect x="10" y="32" width="12" height="9" rx="2" fill="#fbbf24"/>
+  <line x1="16" y1="32" x2="16" y2="41" stroke="#f59e0b" stroke-width="1"/>
+  <line x1="10" y1="36.5" x2="22" y2="36.5" stroke="#f59e0b" stroke-width="1"/>
+  <!-- Card number dots -->
+  <circle cx="30" cy="38" r="1.5" fill="#c7d2fe"/>
+  <circle cx="35" cy="38" r="1.5" fill="#c7d2fe"/>
+  <circle cx="40" cy="38" r="1.5" fill="#c7d2fe"/>
+  <circle cx="45" cy="38" r="1.5" fill="#c7d2fe"/>
+</svg>

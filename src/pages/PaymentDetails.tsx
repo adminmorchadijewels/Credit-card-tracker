@@ -2,7 +2,12 @@ import { useState, useRef } from "react";
 import { useStore } from "@/data/store";
 import { Payment, Transaction } from "@/types";
 import { formatCurrency, formatDate, generateId } from "@/utils/formatters";
-import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp, Download, FileDown } from "lucide-react";
+import {
+  exportPaymentsCSV,
+  downloadPaymentsSample,
+  importPaymentsCSV,
+} from "@/lib/import-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +46,7 @@ const PaymentDetails = () => {
   const [txnModalOpen, setTxnModalOpen] = useState(false);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [chatPayment, setChatPayment] = useState<Payment | null>(null);
 
@@ -177,6 +183,26 @@ const PaymentDetails = () => {
     setTxnModalOpen(false);
   };
 
+  const handleImportPayments = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const csv = ev.target?.result as string;
+      const cardMap: Record<string, string> = Object.fromEntries(cards.map((c) => [c.id, c.cardName]));
+      const { payments: imported, errors } = importPaymentsCSV(csv, cardMap);
+      if (errors.length > 0) {
+        toast({ title: "Import errors", description: errors.join("\n"), variant: "destructive" });
+      }
+      imported.forEach((p) => addPayment(p));
+      if (imported.length > 0) {
+        toast({ title: `Imported ${imported.length} payment${imported.length !== 1 ? "s" : ""}` });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const getUndefinedAmount = (p: Payment) => {
     const txnTotal = (p.transactions || []).reduce((s, t) => s + t.amount, 0);
     return Math.max(0, p.paymentDue - txnTotal);
@@ -189,9 +215,21 @@ const PaymentDetails = () => {
           <h1 className="text-heading text-foreground">Payment Details</h1>
           <p className="mt-1 text-body-sm text-muted-foreground">{payments.length} payment records</p>
         </div>
-        <Button onClick={openAdd} className="gap-2">
-          <Plus size={16} /> Add Payment
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportPaymentsCSV(payments)}>
+            <Download size={14} /> Export CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={downloadPaymentsSample}>
+            <FileDown size={14} /> Sample CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => importRef.current?.click()}>
+            <Upload size={14} /> Import CSV
+          </Button>
+          <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={handleImportPayments} />
+          <Button onClick={openAdd} className="gap-2">
+            <Plus size={16} /> Add Payment
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

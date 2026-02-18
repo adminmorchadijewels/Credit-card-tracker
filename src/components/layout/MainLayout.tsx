@@ -1,7 +1,9 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
+import { useBackup } from "@/hooks/useBackup";
 
 export const MainLayout = ({ children }: { children: ReactNode }) => {
+  useBackup();
   return (
     <div className="flex min-h-screen w-full">
       <AppSidebar />
