@@ -194,9 +194,22 @@ const PaymentDetails = () => {
       if (errors.length > 0) {
         toast({ title: "Import errors", description: errors.join("\n"), variant: "destructive" });
       }
-      imported.forEach((p) => addPayment(p));
-      if (imported.length > 0) {
-        toast({ title: `Imported ${imported.length} payment${imported.length !== 1 ? "s" : ""}` });
+      let added = 0, updated = 0;
+      const existingIds = new Set(payments.map((p) => p.id));
+      imported.forEach((p) => {
+        if (existingIds.has(p.id)) {
+          updatePayment(p);
+          updated++;
+        } else {
+          addPayment(p);
+          added++;
+        }
+      });
+      const parts: string[] = [];
+      if (added > 0) parts.push(`${added} added`);
+      if (updated > 0) parts.push(`${updated} updated`);
+      if (parts.length > 0) {
+        toast({ title: `Import complete: ${parts.join(", ")}` });
       }
     };
     reader.readAsText(file);
@@ -636,18 +649,33 @@ const PaymentDetails = () => {
       )}
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Payment?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {(() => {
+        const paymentToDelete = payments.find((p) => p.id === deleteId);
+        const linkedTxnCount = paymentToDelete?.transactions?.length ?? 0;
+        return (
+          <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Payment?</AlertDialogTitle>
+                {linkedTxnCount > 0 ? (
+                  <AlertDialogDescription className="text-destructive font-medium">
+                    Cannot delete this payment. It has {linkedTxnCount} transaction{linkedTxnCount !== 1 ? "s" : ""} linked to it.
+                    Please delete those transactions first before removing this payment.
+                  </AlertDialogDescription>
+                ) : (
+                  <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                )}
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{linkedTxnCount > 0 ? "OK" : "Cancel"}</AlertDialogCancel>
+                {linkedTxnCount === 0 && (
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+                )}
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
     </div>
   );
 };

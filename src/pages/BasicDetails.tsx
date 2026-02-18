@@ -33,7 +33,7 @@ const emptyCard: CreditCard = {
 };
 
 const BasicDetails = () => {
-  const { cards, addCard, updateCard, deleteCard, loading } = useStore();
+  const { cards, payments, addCard, updateCard, deleteCard, loading } = useStore();
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -107,9 +107,22 @@ const BasicDetails = () => {
       if (errors.length > 0) {
         toast({ title: "Import errors", description: errors.join("\n"), variant: "destructive" });
       }
-      imported.forEach((card) => addCard(card));
-      if (imported.length > 0) {
-        toast({ title: `Imported ${imported.length} card${imported.length !== 1 ? "s" : ""}` });
+      let added = 0, updated = 0;
+      const existingIds = new Set(cards.map((c) => c.id));
+      imported.forEach((card) => {
+        if (existingIds.has(card.id)) {
+          updateCard(card);
+          updated++;
+        } else {
+          addCard(card);
+          added++;
+        }
+      });
+      const parts: string[] = [];
+      if (added > 0) parts.push(`${added} added`);
+      if (updated > 0) parts.push(`${updated} updated`);
+      if (parts.length > 0) {
+        toast({ title: `Import complete: ${parts.join(", ")}` });
       }
     };
     reader.readAsText(file);
@@ -399,18 +412,32 @@ const BasicDetails = () => {
       </Dialog>
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Card?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete this card and cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {(() => {
+        const linkedPaymentsCount = payments.filter((p) => p.cardId === deleteId).length;
+        return (
+          <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Card?</AlertDialogTitle>
+                {linkedPaymentsCount > 0 ? (
+                  <AlertDialogDescription className="text-destructive font-medium">
+                    Cannot delete this card. It has {linkedPaymentsCount} payment record{linkedPaymentsCount !== 1 ? "s" : ""} linked to it.
+                    Please delete those payments first before removing this card.
+                  </AlertDialogDescription>
+                ) : (
+                  <AlertDialogDescription>This will permanently delete this card and cannot be undone.</AlertDialogDescription>
+                )}
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{linkedPaymentsCount > 0 ? "OK" : "Cancel"}</AlertDialogCancel>
+                {linkedPaymentsCount === 0 && (
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+                )}
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
     </div>
   );
 };
