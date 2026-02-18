@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, CreditCard, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, CreditCard, Receipt, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -10,58 +10,71 @@ const navItems = [
 ];
 
 export const AppSidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
   return (
-    <aside
-      className={cn(
-        "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
-        collapsed ? "w-[68px]" : "w-[240px]"
-      )}
-    >
-      <div className="flex h-16 items-center justify-between px-4">
-        {!collapsed && (
-          <span className="text-lg font-semibold text-sidebar-primary-foreground tracking-tight">
-            💳 CardTrack
-          </span>
-        )}
+    <>
+      {/* Mobile top bar */}
+      <div className="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between bg-sidebar px-4 md:hidden">
+        <span className="text-lg font-semibold text-sidebar-primary-foreground tracking-tight">
+          💳 CardTrack
+        </span>
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="ml-auto rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
       </div>
 
-      <nav className="mt-4 flex flex-1 flex-col gap-1 px-2">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
-            >
-              <item.icon size={20} className="shrink-0" />
-              {!collapsed && <span>{item.title}</span>}
-            </NavLink>
-          );
-        })}
-      </nav>
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMobileOpen(false)} />
+      )}
 
-      <div className="p-4">
-        {!collapsed && (
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-screen flex-col bg-sidebar text-sidebar-foreground transition-transform duration-300 w-[240px]",
+          "md:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
+        <div className="flex h-16 items-center px-4">
+          <span className="text-lg font-semibold text-sidebar-primary-foreground tracking-tight">
+            💳 CardTrack
+          </span>
+        </div>
+
+        <nav className="mt-4 flex flex-1 flex-col gap-1 px-2">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                )}
+              >
+                <item.icon size={20} className="shrink-0" />
+                <span>{item.title}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div className="p-4">
           <div className="rounded-lg bg-sidebar-accent p-3 text-body-xs text-sidebar-foreground/50">
             Data stored locally
           </div>
-        )}
-      </div>
-    </aside>
+        </div>
+      </aside>
+    </>
   );
 };

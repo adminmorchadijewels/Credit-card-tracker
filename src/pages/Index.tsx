@@ -288,48 +288,67 @@ const Dashboard = () => {
           <div className="space-y-6">
             {targetData.map((item, i) => (
               <div key={item.name}>
-                <div className="mb-2 flex items-center justify-between text-body-sm">
+                <div className="mb-3 flex items-center justify-between text-body-sm">
                   <span className="font-semibold text-foreground">{item.name}</span>
                   <span className="text-muted-foreground">
                     {formatCurrency(item.actual)} spent
                   </span>
                 </div>
                 {item.milestones.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {item.milestones.map((m, mi) => {
-                      const pct = m.spend > 0 ? Math.min(Math.round((item.actual / m.spend) * 100), 100) : 0;
-                      const achieved = item.actual >= m.spend;
-                      return (
-                        <div key={mi}>
-                          <div className="flex items-center justify-between text-body-xs mb-1">
-                            <span className="text-muted-foreground">
-                              {formatCurrency(m.spend)}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className={achieved ? "text-success font-medium" : "text-muted-foreground"}>{pct}%</span>
-                              <Badge variant="outline" className={`text-body-xs ${achieved ? "text-success border-success/30 bg-success/5" : "text-muted-foreground"}`}>
-                                {m.reward}
-                              </Badge>
+                  <div className="relative">
+                    {/* Horizontal stepper */}
+                    <div className="flex items-center">
+                      {item.milestones.map((m, mi) => {
+                        const achieved = item.actual >= m.spend;
+                        const pct = m.spend > 0 ? Math.min(Math.round((item.actual / m.spend) * 100), 100) : 0;
+                        const isLast = mi === item.milestones.length - 1;
+                        return (
+                          <div key={mi} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
+                            {/* Circle node */}
+                            <div className="flex flex-col items-center">
+                              <div
+                                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all shrink-0 ${
+                                  achieved
+                                    ? "border-success bg-success text-success-foreground"
+                                    : "border-border bg-card text-muted-foreground"
+                                }`}
+                              >
+                                {achieved ? (
+                                  <CheckCircle2 size={18} />
+                                ) : (
+                                  <span>{mi + 1}</span>
+                                )}
+                              </div>
+                              <div className="mt-1.5 text-center max-w-[80px]">
+                                <p className="text-[10px] font-medium text-foreground leading-tight truncate">{formatCurrency(m.spend)}</p>
+                                <p className="text-[9px] text-muted-foreground leading-tight truncate" title={m.reward}>{m.reward}</p>
+                                {!achieved && pct > 0 && (
+                                  <p className="text-[9px] font-medium" style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}>{pct}%</p>
+                                )}
+                              </div>
                             </div>
+                            {/* Connecting line */}
+                            {!isLast && (
+                              <div className="flex-1 mx-1 h-0.5 bg-border relative">
+                                <div
+                                  className="absolute inset-y-0 left-0 h-full transition-all duration-700"
+                                  style={{
+                                    width: achieved ? "100%" : `${pct}%`,
+                                    backgroundColor: achieved ? "hsl(152, 60%, 45%)" : CHART_COLORS[i % CHART_COLORS.length],
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
-                          <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full transition-all duration-700"
-                              style={{
-                                width: `${pct}%`,
-                                backgroundColor: achieved ? "hsl(152, 60%, 45%)" : CHART_COLORS[i % CHART_COLORS.length],
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : (
                   <p className="text-body-xs text-muted-foreground">No milestones defined</p>
                 )}
                 {item.nextMilestone && (
-                  <p className="text-body-xs text-muted-foreground mt-1.5">
+                  <p className="text-body-xs text-muted-foreground mt-2">
                     Next: Spend {formatCurrency(item.nextMilestone.spend - item.actual)} more → {item.nextMilestone.reward}
                   </p>
                 )}
