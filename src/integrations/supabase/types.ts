@@ -162,12 +162,50 @@ export type Database = {
           created_at?: string
         }
       }
+      statement_chunks: {
+        Row: {
+          id: string
+          payment_id: string
+          chunk_index: number
+          content: string
+          embedding: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          payment_id: string
+          chunk_index: number
+          content: string
+          embedding?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          payment_id?: string
+          chunk_index?: number
+          content?: string
+          embedding?: string | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_statement_chunks: {
+        Args: {
+          query_embedding: string
+          payment_id_filter: string
+          match_count?: number
+        }
+        Returns: {
+          id: string
+          payment_id: string
+          content: string
+          similarity: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

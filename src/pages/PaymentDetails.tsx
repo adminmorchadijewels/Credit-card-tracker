@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { StatementChat } from "@/components/StatementChat";
+import { MessageSquare } from "lucide-react";
 
 const statusStyles: Record<string, string> = {
   Paid: "bg-success text-success-foreground",
@@ -40,6 +42,7 @@ const PaymentDetails = () => {
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [chatPayment, setChatPayment] = useState<Payment | null>(null);
 
   const [form, setForm] = useState<Payment>({
     id: generateId(), cardId: "", cardName: "",
@@ -272,6 +275,11 @@ const PaymentDetails = () => {
                   {displayStatus !== "Paid" && (
                     <Button variant="ghost" size="sm" className="h-7 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>Mark Paid</Button>
                   )}
+                  {p.statementFileUrl && (
+                    <Button variant="ghost" size="sm" className="h-7 text-body-xs gap-1 text-primary" onClick={() => setChatPayment(p)}>
+                      <MessageSquare size={12} /> Ask AI
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={() => openEdit(p)}><Pencil size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 size={14} /></Button>
                 </div>
@@ -393,6 +401,11 @@ const PaymentDetails = () => {
                         {displayStatus !== "Paid" && (
                           <Button variant="ghost" size="sm" className="h-8 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>
                             Mark Paid
+                          </Button>
+                        )}
+                        {p.statementFileUrl && (
+                          <Button variant="ghost" size="sm" className="h-8 text-body-xs gap-1 text-primary" onClick={() => setChatPayment(p)}>
+                            <MessageSquare size={14} /> Ask AI
                           </Button>
                         )}
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(p)}>
@@ -578,6 +591,11 @@ const PaymentDetails = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Statement AI Chat */}
+      {chatPayment && (
+        <StatementChat payment={chatPayment} onClose={() => setChatPayment(null)} />
+      )}
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
