@@ -142,8 +142,54 @@ const BasicDetails = () => {
         )}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+      {/* Mobile Card Layout */}
+      <div className="block md:hidden space-y-4">
+        {filtered.map((card) => (
+          <div key={card.id} className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-medium text-foreground">{card.cardName}</p>
+                <p className="text-body-xs text-muted-foreground">{card.bank} • {card.ownedBy}</p>
+              </div>
+              <Badge variant={card.cardStatus === "Active" ? "default" : "secondary"} className={card.cardStatus === "Active" ? "bg-success text-success-foreground" : ""}>
+                {card.cardStatus}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-body-sm">
+              <div>
+                <p className="text-body-xs text-muted-foreground">Limit</p>
+                <p className="font-medium">{formatCurrency(card.cardLimit)}</p>
+              </div>
+              <div>
+                <p className="text-body-xs text-muted-foreground">Top Target</p>
+                <p className="font-medium">{getTopTarget(card)}</p>
+              </div>
+              <div>
+                <p className="text-body-xs text-muted-foreground">Bill Gen / Pay</p>
+                <p className="font-medium">{card.billGenerationDay} / {card.billPaymentDate}</p>
+              </div>
+              <div>
+                <p className="text-body-xs text-muted-foreground">Expiry (days)</p>
+                <p className="font-medium">{card.rewardPointsExpiryDays}</p>
+              </div>
+            </div>
+            <div className="flex gap-1 pt-1">
+              <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => openEdit(card)}>
+                <Pencil size={14} /> Edit
+              </Button>
+              <Button variant="outline" size="sm" className="text-destructive gap-1" onClick={() => setDeleteId(card.id)}>
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">No cards found</div>
+        )}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
@@ -194,7 +240,7 @@ const BasicDetails = () => {
           <DialogHeader>
             <DialogTitle>{editingCard ? "Edit Card" : "Add New Card"}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
             <div className="space-y-2">
               <Label>Card ID</Label>
               <Input value={form.id} onChange={(e) => setField("id", e.target.value)} />
