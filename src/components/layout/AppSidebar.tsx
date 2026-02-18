@@ -71,7 +71,7 @@ export const AppSidebar = () => {
 
         <div className="p-4">
           <div className="rounded-lg bg-sidebar-accent p-3 text-body-xs text-sidebar-foreground/50">
-            Data stored locally
+            Synced with Supabase
           </div>
         </div>
       </aside>

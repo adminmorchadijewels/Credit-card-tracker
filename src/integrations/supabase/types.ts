@@ -7,14 +7,161 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
-      [_ in never]: never
+      credit_cards: {
+        Row: {
+          id: string
+          parent_id: string
+          card_name: string
+          card_status: string
+          owned_by: string
+          bank: string
+          customer_care: string
+          bill_generation_day: number
+          bill_payment_date: number
+          limit_shared: boolean
+          milestone_rewards: string
+          general_rewards: string
+          target_milestones: Json
+          annual_charges: number
+          registered_no: string
+          email: string
+          annual_cycle_reset: string
+          card_limit: number
+          reward_points_expiry_days: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          parent_id?: string
+          card_name: string
+          card_status?: string
+          owned_by?: string
+          bank: string
+          customer_care?: string
+          bill_generation_day?: number
+          bill_payment_date?: number
+          limit_shared?: boolean
+          milestone_rewards?: string
+          general_rewards?: string
+          target_milestones?: Json
+          annual_charges?: number
+          registered_no?: string
+          email?: string
+          annual_cycle_reset?: string
+          card_limit?: number
+          reward_points_expiry_days?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          parent_id?: string
+          card_name?: string
+          card_status?: string
+          owned_by?: string
+          bank?: string
+          customer_care?: string
+          bill_generation_day?: number
+          bill_payment_date?: number
+          limit_shared?: boolean
+          milestone_rewards?: string
+          general_rewards?: string
+          target_milestones?: Json
+          annual_charges?: number
+          registered_no?: string
+          email?: string
+          annual_cycle_reset?: string
+          card_limit?: number
+          reward_points_expiry_days?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      payments: {
+        Row: {
+          id: string
+          card_id: string
+          card_name: string
+          statement_date: string
+          payment_due: number
+          payment_deadline: string
+          payment_paid_on: string | null
+          paid_amount: number
+          status: string
+          notes: string
+          statement_file_url: string | null
+          statement_file_name: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          card_id: string
+          card_name: string
+          statement_date: string
+          payment_due?: number
+          payment_deadline?: string
+          payment_paid_on?: string | null
+          paid_amount?: number
+          status?: string
+          notes?: string
+          statement_file_url?: string | null
+          statement_file_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          card_id?: string
+          card_name?: string
+          statement_date?: string
+          payment_due?: number
+          payment_deadline?: string
+          payment_paid_on?: string | null
+          paid_amount?: number
+          status?: string
+          notes?: string
+          statement_file_url?: string | null
+          statement_file_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      transactions: {
+        Row: {
+          id: string
+          payment_id: string
+          date: string
+          category: string
+          amount: number
+          remark: string
+          created_at: string
+        }
+        Insert: {
+          id: string
+          payment_id: string
+          date: string
+          category?: string
+          amount: number
+          remark?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          payment_id?: string
+          date?: string
+          category?: string
+          amount?: number
+          remark?: string
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

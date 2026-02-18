@@ -39,7 +39,19 @@ const getFYRange = (startYear: number) => ({
 });
 
 const Dashboard = () => {
-  const { cards, payments } = useStore();
+  const { cards, payments, loading } = useStore();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="text-body-sm text-muted-foreground">Loading data...</p>
+        </div>
+      </div>
+    );
+  }
+
   const fyOptions = useMemo(() => getFYOptions(), []);
   const [selectedFYYear, setSelectedFYYear] = useState(fyOptions[0].startYear);
   const fy = useMemo(() => getFYRange(selectedFYYear), [selectedFYYear]);
@@ -161,13 +173,13 @@ const Dashboard = () => {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-heading text-foreground">Dashboard</h1>
           <p className="mt-1 text-body-sm text-muted-foreground">{fy.label} • Financial Overview</p>
         </div>
         <select value={selectedFYYear} onChange={(e) => setSelectedFYYear(Number(e.target.value))}
-          className="h-10 rounded-lg border border-input bg-card px-4 text-body-sm font-medium text-foreground">
+          className="h-10 rounded-lg border border-input bg-card px-4 text-body-sm font-medium text-foreground shrink-0">
           {fyOptions.map((opt) => (
             <option key={opt.startYear} value={opt.startYear}>{opt.label}</option>
           ))}
@@ -295,9 +307,9 @@ const Dashboard = () => {
                   </span>
                 </div>
                 {item.milestones.length > 0 ? (
-                  <div className="relative">
+                  <div className="relative overflow-x-auto pb-1">
                     {/* Horizontal stepper */}
-                    <div className="flex items-center">
+                    <div className="flex items-center min-w-0">
                       {item.milestones.map((m, mi) => {
                         const achieved = item.actual >= m.spend;
                         const pct = m.spend > 0 ? Math.min(Math.round((item.actual / m.spend) * 100), 100) : 0;

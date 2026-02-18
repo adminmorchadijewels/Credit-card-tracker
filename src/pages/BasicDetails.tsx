@@ -28,13 +28,24 @@ const emptyCard: CreditCard = {
 };
 
 const BasicDetails = () => {
-  const { cards, addCard, updateCard, deleteCard } = useStore();
+  const { cards, addCard, updateCard, deleteCard, loading } = useStore();
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
   const [form, setForm] = useState<CreditCard>({ ...emptyCard, id: generateId() });
   const [bankFilter, setBankFilter] = useState("");
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="text-body-sm text-muted-foreground">Loading data...</p>
+        </div>
+      </div>
+    );
+  }
 
   const filtered = cards.filter((c) => {
     const q = search.toLowerCase();
@@ -127,11 +138,11 @@ const BasicDetails = () => {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search cards..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <select value={bankFilter} onChange={(e) => setBankFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
+        <select value={bankFilter} onChange={(e) => setBankFilter(e.target.value)} className="h-10 w-full sm:w-auto rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
           <option value="">All Banks</option>
           {banks.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
@@ -236,7 +247,7 @@ const BasicDetails = () => {
 
       {/* Add/Edit Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingCard ? "Edit Card" : "Add New Card"}</DialogTitle>
           </DialogHeader>

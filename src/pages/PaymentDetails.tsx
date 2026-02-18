@@ -27,7 +27,7 @@ const statusStyles: Record<string, string> = {
 const TRANSACTION_CATEGORIES = ["Travel", "Dining", "Shopping", "Groceries", "Fuel", "Bills", "Entertainment", "Health", "Education", "Other"];
 
 const PaymentDetails = () => {
-  const { cards, payments, addPayment, updatePayment, deletePayment, addTransaction, updateTransaction, deleteTransaction } = useStore();
+  const { cards, payments, addPayment, updatePayment, deletePayment, addTransaction, updateTransaction, deleteTransaction, loading } = useStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [cardFilter, setCardFilter] = useState("");
@@ -41,13 +41,28 @@ const PaymentDetails = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
 
+  const [form, setForm] = useState<Payment>({
+    id: generateId(), cardId: "", cardName: "",
+    statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
+    paidAmount: 0, status: "Pending", notes: "", transactions: [],
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="text-body-sm text-muted-foreground">Loading data...</p>
+        </div>
+      </div>
+    );
+  }
+
   const emptyPayment: Payment = {
     id: generateId(), cardId: cards[0]?.id || "", cardName: cards[0]?.cardName || "",
     statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
     paidAmount: 0, status: "Pending", notes: "", transactions: [],
   };
-
-  const [form, setForm] = useState<Payment>(emptyPayment);
 
   const filtered = payments.filter((p) => {
     const q = search.toLowerCase();
@@ -65,7 +80,9 @@ const PaymentDetails = () => {
 
   const openAdd = () => {
     setEditingPayment(null);
-    setForm({ ...emptyPayment, id: generateId() });
+    setForm({ id: generateId(), cardId: cards[0]?.id || "", cardName: cards[0]?.cardName || "",
+      statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
+      paidAmount: 0, status: "Pending", notes: "", transactions: [] });
     setModalOpen(true);
   };
 
@@ -176,17 +193,17 @@ const PaymentDetails = () => {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search payments..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 w-full sm:w-auto rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
           <option value="">All Status</option>
           <option value="Paid">Paid</option>
           <option value="Pending">Pending</option>
           <option value="Overdue">Overdue</option>
         </select>
-        <select value={cardFilter} onChange={(e) => setCardFilter(e.target.value)} className="h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
+        <select value={cardFilter} onChange={(e) => setCardFilter(e.target.value)} className="h-10 w-full sm:w-auto rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
           <option value="">All Cards</option>
           {cards.map((c) => <option key={c.id} value={c.id}>{c.cardName}</option>)}
         </select>
@@ -477,7 +494,7 @@ const PaymentDetails = () => {
 
       {/* Add/Edit Payment Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingPayment ? "Edit Payment" : "Add Payment"}</DialogTitle>
           </DialogHeader>
@@ -528,7 +545,7 @@ const PaymentDetails = () => {
 
       {/* Transaction Modal */}
       <Dialog open={txnModalOpen} onOpenChange={setTxnModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingTxn ? "Edit Transaction" : "Add Transaction"}</DialogTitle>
           </DialogHeader>

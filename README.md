@@ -1,73 +1,91 @@
-# Welcome to your Lovable project
+# Credit Card Tracker
 
-## Project info
+A personal credit card management application built with React, TypeScript, Tailwind CSS, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- Track multiple credit cards with full details
+- Monitor payment due dates and history
+- Categorize transactions per statement
+- Milestone-based reward tracking
+- Financial year analytics dashboard
+- Upload statement files to Supabase Storage
+- Mobile-friendly responsive design
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend:** React 18, TypeScript, Vite
+- **UI:** shadcn/ui, Tailwind CSS, Radix UI
+- **Backend:** Supabase (PostgreSQL + Storage)
+- **Charts:** Recharts
+- **Forms:** React Hook Form + Zod
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Setup
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### 1. Clone the repository
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
+cd Credit-card-tracker
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 2. Create a Supabase project
 
-# Step 3: Install the necessary dependencies.
-npm i
+1. Go to [supabase.com](https://supabase.com) and create a new project
+2. Note your **Project URL** and **anon/public API key** from Project Settings → API
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 3. Configure environment variables
+
+Copy `.env.example` to `.env` and fill in your Supabase credentials:
+
+```sh
+cp .env.example .env
+```
+
+Edit `.env`:
+```
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-public-key
+```
+
+### 4. Run the database schema
+
+Run the SQL schema in your Supabase project to create the required tables:
+
+**Option A – Supabase Dashboard (SQL Editor):**
+1. Open your Supabase project → SQL Editor
+2. Paste the contents of `schema.sql` and click **Run**
+
+**Option B – Supabase CLI:**
+```sh
+npx supabase db push
+```
+
+### 5. Start the development server
+
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Scripts
 
-**Use GitHub Codespaces**
+```sh
+npm run dev        # Start development server
+npm run build      # Build for production
+npm run preview    # Preview production build
+npm run lint       # Lint code
+npm run test       # Run tests
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Database Schema
 
-## What technologies are used for this project?
+The schema creates three tables:
 
-This project is built with:
+- **`credit_cards`** – Card details, limits, billing cycles, reward milestones
+- **`payments`** – Statement records with payment status and amounts
+- **`transactions`** – Individual transactions per payment statement
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+See `schema.sql` for the full schema with RLS policies and indexes.
