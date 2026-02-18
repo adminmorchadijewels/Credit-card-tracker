@@ -3,8 +3,15 @@ import { useStore } from "@/data/store";
 import { formatCurrency } from "@/utils/formatters";
 import { getFinancialYearMonths } from "@/utils/dateHelpers";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { Wallet, CreditCard, AlertTriangle, TrendingUp, Target, CalendarDays, CheckCircle2, XCircle, BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import {
+  Wallet, CreditCard, AlertTriangle, TrendingUp, Target, CalendarDays,
+  CheckCircle2, XCircle, BarChart3, PieChart as PieChartIcon,
+  ChevronDown, SlidersHorizontal,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -21,12 +28,16 @@ const CHART_COLORS = [
   "hsl(170, 60%, 40%)",
 ];
 
+// ── FY helpers ──────────────────────────────────────────────────────────────
+
 const getFYOptions = () => {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
-  const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+  // currentFYStart: the April that started the current FY
+  const currentFYStart = currentMonth >= 3 ? currentYear : currentYear - 1;
   const options = [];
-  for (let y = startYear; y >= startYear - 4; y--) {
+  // Always include one future FY (currentFYStart + 1) plus 4 past FYs
+  for (let y = currentFYStart + 1; y >= currentFYStart - 4; y--) {
     options.push({ label: `FY ${y}-${(y + 1).toString().slice(2)}`, startYear: y });
   }
   return options;
@@ -38,8 +49,84 @@ const getFYRange = (startYear: number) => ({
   label: `FY ${startYear}-${(startYear + 1).toString().slice(2)}`,
 });
 
+// ── Reusable multi-select filter control ─────────────────────────────────────
+
+function MultiSelect({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const toggle = (value: string) =>
+    onChange(
+      selected.includes(value)
+        ? selected.filter((v) => v !== value)
+        : [...selected, value]
+    );
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-body-xs font-normal shrink-0"
+        >
+          <SlidersHorizontal size={12} />
+          {selected.length === 0
+            ? `All ${label}`
+            : `${selected.length}/${options.length} ${label}`}
+          <ChevronDown size={11} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-2" align="end">
+        <div className="space-y-0.5 max-h-60 overflow-y-auto">
+          <button
+            className="w-full text-left px-2 py-1.5 rounded text-body-xs text-muted-foreground hover:bg-muted/60 transition-colors"
+            onClick={() => onChange([])}
+          >
+            All {label}
+          </button>
+          {options.map((opt) => (
+            <label
+              key={opt.value}
+              className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-muted/60 transition-colors select-none"
+            >
+              <Checkbox
+                checked={selected.includes(opt.value)}
+                onCheckedChange={() => toggle(opt.value)}
+              />
+              <span className="text-body-xs text-foreground truncate">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
 const Dashboard = () => {
   const { cards, payments, loading } = useStore();
+
+  // ── All hooks must be before any conditional return ──────────────────────
+  const fyOptions = useMemo(() => getFYOptions(), []);
+  // Default: fyOptions[1] = current FY (fyOptions[0] is next/future FY)
+  const [selectedFYYear, setSelectedFYYear] = useState(() => fyOptions[1].startYear);
+
+  // Per-section multi-select filters (empty array = show all)
+  const [timelineFilter, setTimelineFilter] = useState<string[]>([]);
+  const [trendFilter, setTrendFilter] = useState<string[]>([]);
+  const [targetFilter, setTargetFilter] = useState<string[]>([]);
+  const [utilizationFilter, setUtilizationFilter] = useState<string[]>([]);
+  // Bank split: filter by card owner
+  const [bankOwnerFilter, setBankOwnerFilter] = useState<string[]>([]);
 
   if (loading) {
     return (
@@ -52,64 +139,109 @@ const Dashboard = () => {
     );
   }
 
-  const fyOptions = useMemo(() => getFYOptions(), []);
-  const [selectedFYYear, setSelectedFYYear] = useState(fyOptions[0].startYear);
-  const fy = useMemo(() => getFYRange(selectedFYYear), [selectedFYYear]);
+  const fy = getFYRange(selectedFYYear);
+  const now = new Date();
 
   const fyPayments = payments.filter((p) => {
     const d = new Date(p.statementDate);
     return d >= fy.start && d <= fy.end;
   });
 
+  const activeCardsList = cards.filter((c) => c.cardStatus === "Active");
+
+  // ── KPI metrics ───────────────────────────────────────────────────────────
   const totalSpend = fyPayments.reduce((s, p) => s + p.paymentDue, 0);
-  const activeCards = cards.filter((c) => c.cardStatus === "Active").length;
+  const activeCards = activeCardsList.length;
   const missedPayments = fyPayments.filter((p) => {
-    const status = p.paidAmount >= p.paymentDue ? "Paid" : (p.paymentDeadline && new Date(p.paymentDeadline) < new Date() ? "Overdue" : "Pending");
+    const status =
+      p.paidAmount >= p.paymentDue
+        ? "Paid"
+        : p.paymentDeadline && new Date(p.paymentDeadline) < now
+        ? "Overdue"
+        : "Pending";
     return status === "Overdue";
   }).length;
+  const avgUtilization =
+    activeCardsList.length > 0
+      ? Math.round(
+          activeCardsList.reduce((sum, card) => {
+            const cardSpend = fyPayments
+              .filter((p) => p.cardId === card.id)
+              .reduce((s, p) => s + p.paymentDue, 0);
+            return sum + (card.cardLimit > 0 ? (cardSpend / card.cardLimit) * 100 : 0);
+          }, 0) / activeCardsList.length
+        )
+      : 0;
 
-  // Average utilization across all active cards
-  const activeCardsList = cards.filter((c) => c.cardStatus === "Active");
-  const avgUtilization = activeCardsList.length > 0
-    ? Math.round(
-        activeCardsList.reduce((sum, card) => {
-          const cardSpend = fyPayments.filter((p) => p.cardId === card.id).reduce((s, p) => s + p.paymentDue, 0);
-          return sum + (card.cardLimit > 0 ? (cardSpend / card.cardLimit) * 100 : 0);
-        }, 0) / activeCardsList.length
-      )
-    : 0;
+  // ── Filter option lists ───────────────────────────────────────────────────
+  const cardOptions = activeCardsList.map((c) => ({ value: c.id, label: c.cardName }));
+  const ownerOptions = [
+    ...new Set(cards.map((c) => c.ownedBy).filter(Boolean)),
+  ].map((o) => ({ value: o, label: o }));
 
-  // Card-wise spend
-  const cardSpend = cards.map((card) => ({
-    name: card.cardName.split(" ").slice(-1)[0],
-    fullName: card.cardName,
-    spend: fyPayments.filter((p) => p.cardId === card.id).reduce((s, p) => s + p.paymentDue, 0),
-  })).sort((a, b) => b.spend - a.spend);
+  // ── Card-wise spend ───────────────────────────────────────────────────────
+  const cardSpend = cards
+    .map((card) => ({
+      name: card.cardName.split(" ").slice(-1)[0],
+      fullName: card.cardName,
+      spend: fyPayments
+        .filter((p) => p.cardId === card.id)
+        .reduce((s, p) => s + p.paymentDue, 0),
+    }))
+    .sort((a, b) => b.spend - a.spend);
 
-  // Bank-wise spend
+  // ── Bank-wise spend filtered by owner ────────────────────────────────────
+  const bankFilteredCards =
+    bankOwnerFilter.length > 0
+      ? cards.filter((c) => bankOwnerFilter.includes(c.ownedBy))
+      : cards;
   const bankMap: Record<string, number> = {};
-  cards.forEach((card) => {
-    const spend = fyPayments.filter((p) => p.cardId === card.id).reduce((s, p) => s + p.paymentDue, 0);
+  bankFilteredCards.forEach((card) => {
+    const spend = fyPayments
+      .filter((p) => p.cardId === card.id)
+      .reduce((s, p) => s + p.paymentDue, 0);
     bankMap[card.bank] = (bankMap[card.bank] || 0) + spend;
   });
   const bankSpend = Object.entries(bankMap).map(([name, value]) => ({ name, value }));
 
-  // Target achievement (milestone-based)
-  const targetData = activeCardsList.map((card) => {
-    const actual = fyPayments.filter((p) => p.cardId === card.id).reduce((s, p) => s + p.paymentDue, 0);
-    const milestones = [...(card.targetMilestones || [])].sort((a, b) => a.spend - b.spend);
-    const nextMilestone = milestones.find((m) => actual < m.spend);
-    const topMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
-    const overallPct = topMilestone && topMilestone.spend > 0 ? Math.min(Math.round((actual / topMilestone.spend) * 100), 100) : 0;
-    return { name: card.cardName, actual, milestones, nextMilestone, topTarget: topMilestone?.spend || 0, overallPct };
-  });
+  // ── Target achievement ────────────────────────────────────────────────────
+  // Only include active cards that have at least one milestone with a spend target
+  const allTargetData = activeCardsList
+    .filter((card) => (card.targetMilestones || []).some((m) => m.spend > 0))
+    .map((card) => {
+      const actual = fyPayments
+        .filter((p) => p.cardId === card.id)
+        .reduce((s, p) => s + p.paymentDue, 0);
+      const milestones = [...(card.targetMilestones || [])]
+        .filter((m) => m.spend > 0)
+        .sort((a, b) => a.spend - b.spend);
+      const nextMilestone = milestones.find((m) => actual < m.spend);
+      const topMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
+      const overallPct =
+        topMilestone && topMilestone.spend > 0
+          ? Math.min(Math.round((actual / topMilestone.spend) * 100), 100)
+          : 0;
+      return {
+        cardId: card.id,
+        name: card.cardName,
+        actual,
+        milestones,
+        nextMilestone,
+        topTarget: topMilestone?.spend || 0,
+        overallPct,
+      };
+    });
 
-  // Milestones missed: active cards where top milestone was not achieved and FY is ending/ended
-  const now = new Date();
+  const targetCardOptions = allTargetData.map((t) => ({ value: t.cardId, label: t.name }));
+  const targetData =
+    targetFilter.length > 0
+      ? allTargetData.filter((t) => targetFilter.includes(t.cardId))
+      : allTargetData;
+
   const fyEnded = now > fy.end;
   const milestonesMissed = fyEnded ? targetData.filter((t) => t.overallPct < 100).length : 0;
 
-  // Category-wise spend from transactions
+  // ── Category-wise spend ───────────────────────────────────────────────────
   const categoryMap: Record<string, number> = {};
   fyPayments.forEach((p) => {
     const txns = p.transactions || [];
@@ -118,22 +250,22 @@ const Dashboard = () => {
       categoryMap[t.category] = (categoryMap[t.category] || 0) + t.amount;
     });
     const unaccounted = Math.max(0, p.paymentDue - txnTotal);
-    if (unaccounted > 0) {
-      categoryMap["Other"] = (categoryMap["Other"] || 0) + unaccounted;
-    }
+    if (unaccounted > 0) categoryMap["Other"] = (categoryMap["Other"] || 0) + unaccounted;
   });
   const categorySpend = Object.entries(categoryMap)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
 
-  // Monthly trend
+  // ── Monthly trend filtered by selected cards ──────────────────────────────
   const months = getFinancialYearMonths();
+  const trendCards =
+    trendFilter.length > 0 ? cards.filter((c) => trendFilter.includes(c.id)) : cards;
   const monthlyTrend = months.map((m, i) => {
     const monthIdx = (i + 3) % 12;
     const yearOffset = monthIdx < 3 ? 1 : 0;
     const year = fy.start.getFullYear() + yearOffset;
     const row: Record<string, string | number> = { month: m };
-    cards.forEach((card) => {
+    trendCards.forEach((card) => {
       row[card.cardName] = fyPayments
         .filter((p) => {
           const d = new Date(p.statementDate);
@@ -144,17 +276,31 @@ const Dashboard = () => {
     return row;
   });
 
-  // Per-card utilization (average across FY months with statements)
-  const utilizationData = activeCardsList.map((card) => {
+  // ── Utilization filtered ──────────────────────────────────────────────────
+  const utilizationCards =
+    utilizationFilter.length > 0
+      ? activeCardsList.filter((c) => utilizationFilter.includes(c.id))
+      : activeCardsList;
+  const utilizationData = utilizationCards.map((card) => {
     const cardPayments = fyPayments.filter((p) => p.cardId === card.id);
-    const avgUtil = cardPayments.length > 0
-      ? Math.round(cardPayments.reduce((s, p) => s + (card.cardLimit > 0 ? (p.paymentDue / card.cardLimit) * 100 : 0), 0) / cardPayments.length)
-      : 0;
+    const avgUtil =
+      cardPayments.length > 0
+        ? Math.round(
+            cardPayments.reduce(
+              (s, p) => s + (card.cardLimit > 0 ? (p.paymentDue / card.cardLimit) * 100 : 0),
+              0
+            ) / cardPayments.length
+          )
+        : 0;
     return { name: card.cardName, utilization: avgUtil, limit: card.cardLimit };
   });
 
-  // Statement timeline
-  const timelineData = activeCardsList.map((card) => {
+  // ── Statement timeline filtered ───────────────────────────────────────────
+  const timelineCards =
+    timelineFilter.length > 0
+      ? activeCardsList.filter((c) => timelineFilter.includes(c.id))
+      : activeCardsList;
+  const timelineData = timelineCards.map((card) => {
     const monthStatuses = months.map((m, i) => {
       const monthIdx = (i + 3) % 12;
       const yearOffset = monthIdx < 3 ? 1 : 0;
@@ -170,183 +316,362 @@ const Dashboard = () => {
     return { cardName: card.cardName, cardId: card.id, months: monthStatuses };
   });
 
+  // ── Shared section container class ───────────────────────────────────────
+  const sectionCard =
+    "rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm hover:shadow-md transition-shadow duration-200";
+
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header */}
+    <div className="space-y-6 animate-fade-in">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-heading text-foreground">Dashboard</h1>
           <p className="mt-1 text-body-sm text-muted-foreground">{fy.label} • Financial Overview</p>
         </div>
-        <select value={selectedFYYear} onChange={(e) => setSelectedFYYear(Number(e.target.value))}
-          className="h-10 rounded-lg border border-input bg-card px-4 text-body-sm font-medium text-foreground shrink-0">
+        <select
+          value={selectedFYYear}
+          onChange={(e) => setSelectedFYYear(Number(e.target.value))}
+          className="h-10 rounded-lg border border-input bg-card px-4 text-body-sm font-medium text-foreground shrink-0"
+        >
           {fyOptions.map((opt) => (
             <option key={opt.startYear} value={opt.startYear}>{opt.label}</option>
           ))}
         </select>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard title="Total Spend" value={formatCurrency(totalSpend)} trend={12.5} trendLabel="vs last FY" icon={<Wallet size={22} />} accent="primary" />
-        <MetricCard title="Active Cards" value={String(activeCards)} icon={<CreditCard size={22} />} accent="success" />
-        <MetricCard title="Missed Payments" value={String(missedPayments)} trend={missedPayments > 0 ? missedPayments * 10 : 0} trendLabel="this FY" icon={<AlertTriangle size={22} />} accent="warning" />
-        <MetricCard title="Avg Utilization" value={`${avgUtilization}%`} icon={<TrendingUp size={22} />} accent="secondary" />
+      {/* ── KPI cards ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+        {[
+          {
+            title: "Total Spend",
+            value: formatCurrency(totalSpend),
+            trend: 12.5,
+            trendLabel: "vs last FY",
+            icon: <Wallet size={22} />,
+            accent: "primary" as const,
+          },
+          {
+            title: "Active Cards",
+            value: String(activeCards),
+            icon: <CreditCard size={22} />,
+            accent: "success" as const,
+          },
+          {
+            title: "Missed Payments",
+            value: String(missedPayments),
+            trend: missedPayments > 0 ? missedPayments * 10 : 0,
+            trendLabel: "this FY",
+            icon: <AlertTriangle size={22} />,
+            accent: "warning" as const,
+          },
+          {
+            title: "Avg Utilization",
+            value: `${avgUtilization}%`,
+            icon: <TrendingUp size={22} />,
+            accent: "secondary" as const,
+          },
+        ].map((card, i) => (
+          <div
+            key={card.title}
+            className="animate-fade-in"
+            style={{ animationDelay: `${i * 80}ms` }}
+          >
+            <MetricCard {...card} />
+          </div>
+        ))}
       </div>
 
-      {/* Statement Timeline */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <CalendarDays size={18} className="text-primary" />
+      {/* ── Statement Timeline ─────────────────────────────────────────── */}
+      <div className={sectionCard}>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <CalendarDays size={18} className="text-primary shrink-0" />
           <h3 className="text-base font-semibold text-card-foreground">Statement Timeline</h3>
-          <span className="ml-2 text-body-xs text-muted-foreground">Missing statements highlighted</span>
+          <span className="hidden sm:inline text-body-xs text-muted-foreground">
+            Missing statements highlighted
+          </span>
+          <div className="ml-auto">
+            <MultiSelect
+              label="Cards"
+              options={cardOptions}
+              selected={timelineFilter}
+              onChange={setTimelineFilter}
+            />
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-body-sm">
+
+        <div className="overflow-x-auto -mx-3 px-3">
+          <table className="w-full text-body-sm min-w-[520px]">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-3 py-2 text-left font-semibold text-muted-foreground w-[160px]">Card</th>
+                <th className="px-3 py-2 text-left font-semibold text-muted-foreground w-[130px] sm:w-[160px]">
+                  Card
+                </th>
                 {months.map((m) => (
-                  <th key={m} className="px-2 py-2 text-center font-semibold text-muted-foreground text-body-xs">{m}</th>
+                  <th
+                    key={m}
+                    className="px-1 py-2 text-center font-semibold text-muted-foreground text-body-xs"
+                  >
+                    {m}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {timelineData.map((card) => (
-                <tr key={card.cardId} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2.5 font-medium text-foreground">{card.cardName}</td>
-                  {card.months.map((ms, j) => (
-                    <td key={j} className="px-2 py-2.5 text-center">
-                      {ms.isFuture ? (
-                        <span className="inline-block h-5 w-5 rounded-full bg-muted" />
-                      ) : ms.hasStatement ? (
-                        <CheckCircle2 size={18} className="inline-block text-success" />
-                      ) : (
-                        <XCircle size={18} className="inline-block text-destructive" />
-                      )}
-                    </td>
-                  ))}
+              {timelineData.length === 0 ? (
+                <tr>
+                  <td colSpan={13} className="py-8 text-center text-body-xs text-muted-foreground">
+                    No cards to display
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                timelineData.map((card) => (
+                  <tr
+                    key={card.cardId}
+                    className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
+                  >
+                    <td className="px-3 py-2.5 font-medium text-foreground text-body-xs sm:text-body-sm max-w-[130px] truncate">
+                      {card.cardName}
+                    </td>
+                    {card.months.map((ms, j) => (
+                      <td key={j} className="px-1 py-2.5 text-center">
+                        {ms.isFuture ? (
+                          <span className="inline-block h-4 w-4 rounded-full bg-muted" />
+                        ) : ms.hasStatement ? (
+                          <CheckCircle2 size={16} className="inline-block text-success" />
+                        ) : (
+                          <XCircle size={16} className="inline-block text-destructive" />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-        <div className="mt-3 flex items-center gap-4 text-body-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><CheckCircle2 size={14} className="text-success" /> Added</span>
-          <span className="flex items-center gap-1"><XCircle size={14} className="text-destructive" /> Missing</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-3.5 w-3.5 rounded-full bg-muted" /> Future</span>
+
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-body-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <CheckCircle2 size={13} className="text-success" /> Added
+          </span>
+          <span className="flex items-center gap-1">
+            <XCircle size={13} className="text-destructive" /> Missing
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded-full bg-muted" /> Future
+          </span>
         </div>
       </div>
 
-      {/* Charts Row 1 */}
+      {/* ── Charts Row 1: Card-wise Spend + Bank Split ─────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="col-span-2 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="mb-4 text-base font-semibold text-card-foreground">Card-wise Spend Breakdown</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={cardSpend} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(180, 10%, 88%)" />
-              <XAxis type="number" tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
-              <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Bar dataKey="spend" radius={[0, 6, 6, 0]}>
-                {cardSpend.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <div className={`col-span-1 lg:col-span-2 ${sectionCard}`}>
+          <h3 className="mb-4 text-base font-semibold text-card-foreground">
+            Card-wise Spend Breakdown
+          </h3>
+          <div className="overflow-x-auto">
+            <div className="min-w-[300px]">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={cardSpend} layout="vertical" margin={{ left: 16, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(180, 10%, 88%)" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}K`}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis type="category" dataKey="name" width={72} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Bar dataKey="spend" radius={[0, 6, 6, 0]}>
+                    {cardSpend.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="mb-4 text-base font-semibold text-card-foreground">Bank Spend Split</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={bankSpend} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={4} dataKey="value">
-                {bankSpend.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Monthly Trend */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="mb-4 text-base font-semibold text-card-foreground">Monthly Spend Trend</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(180, 10%, 88%)" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              {cards.map((card, i) => (
-                <Line key={card.id} type="monotone" dataKey={card.cardName} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Target Achievement (Milestone-based) */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <Target size={18} className="text-primary" />
-            <h3 className="text-base font-semibold text-card-foreground">Target Achievement</h3>
-            {milestonesMissed > 0 && (
-              <Badge className="bg-overdue text-overdue-foreground ml-auto">{milestonesMissed} milestone{milestonesMissed > 1 ? "s" : ""} missed</Badge>
+        <div className={sectionCard}>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-card-foreground flex-1">Bank Spend Split</h3>
+            {ownerOptions.length > 0 && (
+              <MultiSelect
+                label="Owners"
+                options={ownerOptions}
+                selected={bankOwnerFilter}
+                onChange={setBankOwnerFilter}
+              />
             )}
           </div>
-          <div className="space-y-6">
-            {targetData.map((item, i) => (
-              <div key={item.name}>
-                <div className="mb-3 flex items-center justify-between text-body-sm">
-                  <span className="font-semibold text-foreground">{item.name}</span>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(item.actual)} spent
-                  </span>
-                </div>
-                {item.milestones.length > 0 ? (
+          {bankSpend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={bankSpend}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={85}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {bankSpend.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-body-xs text-muted-foreground text-center py-16">
+              No data for selected owners
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Charts Row 2: Monthly Trend + Target Achievement ───────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+        {/* Monthly Spend Trend */}
+        <div className={sectionCard}>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-card-foreground flex-1">
+              Monthly Spend Trend
+            </h3>
+            <MultiSelect
+              label="Cards"
+              options={cardOptions}
+              selected={trendFilter}
+              onChange={setTrendFilter}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[300px]">
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={monthlyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(180, 10%, 88%)" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}K`}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                  {trendCards.map((card, i) => (
+                    <Line
+                      key={card.id}
+                      type="monotone"
+                      dataKey={card.cardName}
+                      stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* Target Achievement */}
+        <div className={sectionCard}>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Target size={18} className="text-primary shrink-0" />
+            <h3 className="text-base font-semibold text-card-foreground flex-1">
+              Target Achievement
+            </h3>
+            {milestonesMissed > 0 && (
+              <Badge className="bg-overdue text-overdue-foreground shrink-0">
+                {milestonesMissed} missed
+              </Badge>
+            )}
+            {targetCardOptions.length > 0 && (
+              <MultiSelect
+                label="Cards"
+                options={targetCardOptions}
+                selected={targetFilter}
+                onChange={setTargetFilter}
+              />
+            )}
+          </div>
+
+          {targetData.length === 0 ? (
+            <p className="text-body-sm text-muted-foreground text-center py-10">
+              {allTargetData.length === 0
+                ? "No milestone targets configured. Add spend targets to cards to track progress here."
+                : "No cards selected"}
+            </p>
+          ) : (
+            <div className="space-y-5 max-h-[320px] overflow-y-auto pr-1">
+              {targetData.map((item, i) => (
+                <div key={item.cardId}>
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span className="text-body-sm font-semibold text-foreground">{item.name}</span>
+                    <span className="text-body-xs text-muted-foreground">
+                      {formatCurrency(item.actual)} spent
+                    </span>
+                  </div>
+
+                  {/* Milestone stepper */}
                   <div className="relative overflow-x-auto pb-1">
-                    {/* Horizontal stepper */}
                     <div className="flex items-center min-w-0">
                       {item.milestones.map((m, mi) => {
                         const achieved = item.actual >= m.spend;
-                        const pct = m.spend > 0 ? Math.min(Math.round((item.actual / m.spend) * 100), 100) : 0;
+                        const pct =
+                          m.spend > 0
+                            ? Math.min(Math.round((item.actual / m.spend) * 100), 100)
+                            : 0;
                         const isLast = mi === item.milestones.length - 1;
                         return (
                           <div key={mi} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
-                            {/* Circle node */}
                             <div className="flex flex-col items-center">
                               <div
-                                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold transition-all shrink-0 ${
+                                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-all shrink-0 ${
                                   achieved
                                     ? "border-success bg-success text-success-foreground"
                                     : "border-border bg-card text-muted-foreground"
                                 }`}
                               >
                                 {achieved ? (
-                                  <CheckCircle2 size={18} />
+                                  <CheckCircle2 size={16} />
                                 ) : (
                                   <span>{mi + 1}</span>
                                 )}
                               </div>
-                              <div className="mt-1.5 text-center max-w-[80px]">
-                                <p className="text-[10px] font-medium text-foreground leading-tight truncate">{formatCurrency(m.spend)}</p>
-                                <p className="text-[9px] text-muted-foreground leading-tight truncate" title={m.reward}>{m.reward}</p>
+                              <div className="mt-1 text-center max-w-[72px]">
+                                <p className="text-[10px] font-medium text-foreground leading-tight truncate">
+                                  {formatCurrency(m.spend)}
+                                </p>
+                                <p
+                                  className="text-[9px] text-muted-foreground leading-tight truncate"
+                                  title={m.reward}
+                                >
+                                  {m.reward}
+                                </p>
                                 {!achieved && pct > 0 && (
-                                  <p className="text-[9px] font-medium" style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}>{pct}%</p>
+                                  <p
+                                    className="text-[9px] font-medium"
+                                    style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}
+                                  >
+                                    {pct}%
+                                  </p>
                                 )}
                               </div>
                             </div>
-                            {/* Connecting line */}
                             {!isLast && (
-                              <div className="flex-1 mx-1 h-0.5 bg-border relative">
+                              <div className="flex-1 mx-1 h-0.5 bg-border relative overflow-hidden">
                                 <div
                                   className="absolute inset-y-0 left-0 h-full transition-all duration-700"
                                   style={{
                                     width: achieved ? "100%" : `${pct}%`,
-                                    backgroundColor: achieved ? "hsl(152, 60%, 45%)" : CHART_COLORS[i % CHART_COLORS.length],
+                                    backgroundColor: achieved
+                                      ? "hsl(152, 60%, 45%)"
+                                      : CHART_COLORS[i % CHART_COLORS.length],
                                   }}
                                 />
                               </div>
@@ -356,72 +681,122 @@ const Dashboard = () => {
                       })}
                     </div>
                   </div>
-                ) : (
-                  <p className="text-body-xs text-muted-foreground">No milestones defined</p>
-                )}
-                {item.nextMilestone && (
-                  <p className="text-body-xs text-muted-foreground mt-2">
-                    Next: Spend {formatCurrency(item.nextMilestone.spend - item.actual)} more → {item.nextMilestone.reward}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
+
+                  {item.nextMilestone && (
+                    <p className="text-[10px] text-muted-foreground mt-1.5">
+                      Next: spend {formatCurrency(item.nextMilestone.spend - item.actual)} more →{" "}
+                      {item.nextMilestone.reward}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Row 3: Utilization + Category Spend */}
+      {/* ── Row 3: Utilization + Category Spend ───────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Avg Utilization per card */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <BarChart3 size={18} className="text-primary" />
-            <h3 className="text-base font-semibold text-card-foreground">Average Utilization Rate</h3>
+
+        {/* Average Utilization Rate */}
+        <div className={sectionCard}>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <BarChart3 size={18} className="text-primary shrink-0" />
+            <h3 className="text-base font-semibold text-card-foreground flex-1">
+              Average Utilization Rate
+            </h3>
+            <MultiSelect
+              label="Cards"
+              options={cardOptions}
+              selected={utilizationFilter}
+              onChange={setUtilizationFilter}
+            />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {utilizationData.map((item, i) => (
-              <div key={item.name} className="rounded-lg border border-border bg-background p-4">
-                <p className="text-body-sm font-medium text-foreground">{item.name}</p>
-                <div className="mt-3 flex items-end gap-2">
-                  <span className="text-2xl font-bold" style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}>{item.utilization}%</span>
-                  <span className="mb-0.5 text-body-xs text-muted-foreground">avg of {formatCurrency(item.limit)}</span>
+
+          {utilizationData.length === 0 ? (
+            <p className="text-body-xs text-muted-foreground text-center py-8">
+              No cards selected
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {utilizationData.map((item, i) => (
+                <div
+                  key={item.name}
+                  className="rounded-lg border border-border bg-background p-4 hover:shadow-sm transition-all duration-200 hover:-translate-y-px"
+                >
+                  <p className="text-body-sm font-medium text-foreground truncate">{item.name}</p>
+                  <div className="mt-2.5 flex items-end gap-2">
+                    <span
+                      className="text-2xl font-bold"
+                      style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}
+                    >
+                      {item.utilization}%
+                    </span>
+                    <span className="mb-0.5 text-body-xs text-muted-foreground">
+                      avg / {formatCurrency(item.limit)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${Math.min(item.utilization, 100)}%`,
+                        backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(item.utilization, 100)}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Category-wise Spend */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className={sectionCard}>
           <div className="mb-4 flex items-center gap-2">
             <PieChartIcon size={18} className="text-primary" />
             <h3 className="text-base font-semibold text-card-foreground">Category-wise Spend</h3>
           </div>
           {categorySpend.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={190}>
                 <PieChart>
-                  <Pie data={categorySpend} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
-                    {categorySpend.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  <Pie
+                    data={categorySpend}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={75}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {categorySpend.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
                   </Pie>
                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
                 {categorySpend.map((c, i) => (
                   <div key={c.name} className="flex items-center gap-2 text-body-xs">
-                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                    <span className="text-muted-foreground">{c.name}</span>
-                    <span className="ml-auto font-medium text-foreground">{formatCurrency(c.value)}</span>
+                    <span
+                      className="h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
+                    />
+                    <span className="text-muted-foreground truncate">{c.name}</span>
+                    <span className="ml-auto font-medium text-foreground shrink-0">
+                      {formatCurrency(c.value)}
+                    </span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <p className="text-body-sm text-muted-foreground text-center py-8">No transaction data available. Add transactions to statements to see category breakdown.</p>
+            <p className="text-body-sm text-muted-foreground text-center py-10">
+              No transaction data available. Add transactions to statements to see category
+              breakdown.
+            </p>
           )}
         </div>
       </div>
