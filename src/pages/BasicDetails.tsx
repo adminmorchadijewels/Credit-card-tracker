@@ -86,7 +86,7 @@ const BasicDetails = () => {
 
   const updateMilestone = (index: number, field: keyof TargetMilestone, value: string | number) => {
     setForm((prev) => {
-      const milestones = [...prev.targetMilestones];
+      const milestones = [...(prev.targetMilestones || [])];
       milestones[index] = { ...milestones[index], [field]: value };
       return { ...prev, targetMilestones: milestones };
     });
@@ -95,14 +95,14 @@ const BasicDetails = () => {
   const addMilestone = () => {
     setForm((prev) => ({
       ...prev,
-      targetMilestones: [...prev.targetMilestones, { spend: 0, reward: "" }],
+      targetMilestones: [...(prev.targetMilestones || []), { spend: 0, reward: "" }],
     }));
   };
 
   const removeMilestone = (index: number) => {
     setForm((prev) => ({
       ...prev,
-      targetMilestones: prev.targetMilestones.filter((_, i) => i !== index),
+      targetMilestones: (prev.targetMilestones || []).filter((_, i) => i !== index),
     }));
   };
 
@@ -268,7 +268,7 @@ const BasicDetails = () => {
                   <Plus size={14} /> Add Level
                 </Button>
               </div>
-              {form.targetMilestones.map((m, i) => (
+              {(form.targetMilestones || []).map((m, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
                   <div className="flex-1 space-y-1">
                     <Label className="text-body-xs">Spend (₹)</Label>
@@ -278,7 +278,7 @@ const BasicDetails = () => {
                     <Label className="text-body-xs">Reward</Label>
                     <Input value={m.reward} onChange={(e) => updateMilestone(i, "reward", e.target.value)} placeholder="e.g. 5X points + lounge access" />
                   </div>
-                  {form.targetMilestones.length > 1 && (
+                  {(form.targetMilestones || []).length > 1 && (
                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive mt-5" onClick={() => removeMilestone(i)}>
                       <Trash2 size={14} />
                     </Button>
