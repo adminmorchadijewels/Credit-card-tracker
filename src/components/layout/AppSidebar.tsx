@@ -1,7 +1,9 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, CreditCard, Receipt, Menu, X } from "lucide-react";
+import { LayoutDashboard, CreditCard, Receipt, Menu, X, LogOut } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { title: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -12,6 +14,7 @@ const navItems = [
 export const AppSidebar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   return (
     <>
@@ -69,10 +72,24 @@ export const AppSidebar = () => {
           })}
         </nav>
 
-        <div className="p-4">
-          <div className="rounded-lg bg-sidebar-accent p-3 text-body-xs text-sidebar-foreground/50">
-            Synced with Supabase
-          </div>
+        {/* User info + logout */}
+        <div className="p-3 border-t border-sidebar-accent space-y-2">
+          {user && (
+            <div className="rounded-lg bg-sidebar-accent px-3 py-2 space-y-2">
+              <p className="text-body-xs text-sidebar-foreground/60 truncate" title={user.email}>
+                {user.email}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-7 justify-start gap-2 px-2 text-body-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar"
+                onClick={signOut}
+              >
+                <LogOut size={13} />
+                Sign Out
+              </Button>
+            </div>
+          )}
         </div>
       </aside>
     </>
