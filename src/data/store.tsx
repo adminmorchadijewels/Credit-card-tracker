@@ -21,7 +21,25 @@ const StoreContext = createContext<StoreContextType | null>(null);
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
   try {
     const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
+    if (!stored) return fallback;
+    const parsed = JSON.parse(stored);
+    // Migrate old card data that may lack new fields
+    if (key === "cc_cards" && Array.isArray(parsed)) {
+      return parsed.map((c: any) => ({
+        ...c,
+        targetMilestones: c.targetMilestones || [],
+        rewardPointsExpiryDays: c.rewardPointsExpiryDays ?? c.rewardPointsExpiry ?? 365,
+        milestoneRewards: c.milestoneRewards || "",
+        generalRewards: c.generalRewards || "",
+      })) as T;
+    }
+    if (key === "cc_payments" && Array.isArray(parsed)) {
+      return parsed.map((p: any) => ({
+        ...p,
+        transactions: p.transactions || [],
+      })) as T;
+    }
+    return parsed;
   } catch {
     return fallback;
   }
