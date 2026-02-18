@@ -197,8 +197,113 @@ const PaymentDetails = () => {
         )}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+      {/* Mobile Card Layout */}
+      <div className="block md:hidden space-y-4">
+        {filtered.map((p) => {
+          const displayStatus = computeStatus(p);
+          const isExpanded = expandedPayment === p.id;
+          const txns = p.transactions || [];
+          const undefinedAmt = getUndefinedAmount(p);
+          return (
+            <div key={p.id} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">{p.cardName}</p>
+                    <p className="text-body-xs text-muted-foreground">{p.cardId}</p>
+                  </div>
+                  <Badge className={statusStyles[displayStatus]}>{displayStatus}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-body-sm">
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Statement</p>
+                    <Input type="date" value={p.statementDate} className="h-8 mt-0.5"
+                      onChange={(e) => { const u = { ...p, statementDate: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                  </div>
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Deadline</p>
+                    <Input type="date" value={p.paymentDeadline} className="h-8 mt-0.5"
+                      onChange={(e) => { const u = { ...p, paymentDeadline: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                  </div>
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Due Amount</p>
+                    <Input type="number" value={p.paymentDue} className="h-8 mt-0.5"
+                      onChange={(e) => { const u = { ...p, paymentDue: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                  </div>
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Paid Amount</p>
+                    <Input type="number" value={p.paidAmount} className="h-8 mt-0.5"
+                      onChange={(e) => { const u = { ...p, paidAmount: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-body-xs text-muted-foreground">Paid On</p>
+                    <Input type="date" value={p.paymentPaidOn || ""} className="h-8 mt-0.5"
+                      onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {p.statementFileName ? (
+                    <a href={p.statementFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline text-body-xs">
+                      <FileText size={14} /> {p.statementFileName}
+                    </a>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-7 text-body-xs gap-1" disabled={uploadingFor === p.id}
+                      onClick={() => { setUploadingFor(p.id); fileInputRef.current?.click(); }}>
+                      <Upload size={12} /> {uploadingFor === p.id ? "Uploading..." : "Upload"}
+                    </Button>
+                  )}
+                  {displayStatus !== "Paid" && (
+                    <Button variant="ghost" size="sm" className="h-7 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>Mark Paid</Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={() => openEdit(p)}><Pencil size={14} /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 size={14} /></Button>
+                </div>
+              </div>
+              <button className="w-full flex items-center justify-center gap-1 py-2 text-body-xs text-muted-foreground border-t border-border hover:bg-muted/30 transition-colors"
+                onClick={() => setExpandedPayment(isExpanded ? null : p.id)}>
+                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {txns.length} transaction{txns.length !== 1 ? "s" : ""}
+              </button>
+              {isExpanded && (
+                <div className="border-t border-border bg-muted/10 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-body-sm font-semibold">Transactions</h4>
+                    <Button variant="outline" size="sm" className="gap-1 h-7" onClick={() => openTxnAdd(p.id)}>
+                      <Plus size={12} /> Add
+                    </Button>
+                  </div>
+                  {undefinedAmt > 0 && (
+                    <p className="text-body-xs text-muted-foreground">Unaccounted: <strong className="text-warning">{formatCurrency(undefinedAmt)}</strong></p>
+                  )}
+                  {txns.length > 0 ? txns.map((t) => (
+                    <div key={t.id} className="flex items-start justify-between rounded-lg border border-border bg-card p-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-body-xs">{t.category}</Badge>
+                          <span className="font-medium text-body-sm">{formatCurrency(t.amount)}</span>
+                        </div>
+                        <p className="text-body-xs text-muted-foreground">{formatDate(t.date)}{t.remark ? ` • ${t.remark}` : ""}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openTxnEdit(t)}><Pencil size={12} /></Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => { deleteTransaction(p.id, t.id); toast({ title: "Transaction deleted" }); }}><Trash2 size={12} /></Button>
+                      </div>
+                    </div>
+                  )) : (
+                    <p className="text-body-xs text-muted-foreground text-center py-3">No transactions. Total categorized as "Other".</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">No payments found</div>
+        )}
+      </div>
+
+      {/* Desktop Table Layout */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
@@ -228,7 +333,7 @@ const PaymentDetails = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <Input type="date" value={p.statementDate} className="h-8 w-[130px]"
+                      <Input type="date" value={p.statementDate} className="h-8 w-[150px] min-w-[150px]"
                         onChange={(e) => { const u = { ...p, statementDate: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
                     </td>
                     <td className="px-4 py-3">
@@ -236,11 +341,11 @@ const PaymentDetails = () => {
                         onChange={(e) => { const u = { ...p, paymentDue: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
                     </td>
                     <td className="px-4 py-3">
-                      <Input type="date" value={p.paymentDeadline} className="h-8 w-[130px]"
+                      <Input type="date" value={p.paymentDeadline} className="h-8 w-[150px] min-w-[150px]"
                         onChange={(e) => { const u = { ...p, paymentDeadline: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
                     </td>
                     <td className="px-4 py-3">
-                      <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[130px]"
+                      <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[150px] min-w-[150px]"
                         onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
                     </td>
                     <td className="px-4 py-3">

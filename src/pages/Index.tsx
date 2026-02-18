@@ -85,18 +85,17 @@ const Dashboard = () => {
   // Target achievement (milestone-based)
   const targetData = activeCardsList.map((card) => {
     const actual = fyPayments.filter((p) => p.cardId === card.id).reduce((s, p) => s + p.paymentDue, 0);
-    const milestones = card.targetMilestones || [];
-    const achievedMilestones = milestones.filter((m) => actual >= m.spend);
-    const nextMilestone = milestones.sort((a, b) => a.spend - b.spend).find((m) => actual < m.spend);
-    const topMilestone = milestones.length > 0 ? milestones.reduce((max, m) => m.spend > max.spend ? m : max, milestones[0]) : null;
-    const pct = topMilestone && topMilestone.spend > 0 ? Math.min(Math.round((actual / topMilestone.spend) * 100), 100) : 0;
-    return { name: card.cardName, actual, milestones, achievedMilestones, nextMilestone, topTarget: topMilestone?.spend || 0, pct };
+    const milestones = [...(card.targetMilestones || [])].sort((a, b) => a.spend - b.spend);
+    const nextMilestone = milestones.find((m) => actual < m.spend);
+    const topMilestone = milestones.length > 0 ? milestones[milestones.length - 1] : null;
+    const overallPct = topMilestone && topMilestone.spend > 0 ? Math.min(Math.round((actual / topMilestone.spend) * 100), 100) : 0;
+    return { name: card.cardName, actual, milestones, nextMilestone, topTarget: topMilestone?.spend || 0, overallPct };
   });
 
   // Milestones missed: active cards where top milestone was not achieved and FY is ending/ended
   const now = new Date();
   const fyEnded = now > fy.end;
-  const milestonesMissed = fyEnded ? targetData.filter((t) => t.pct < 100).length : 0;
+  const milestonesMissed = fyEnded ? targetData.filter((t) => t.overallPct < 100).length : 0;
 
   // Category-wise spend from transactions
   const categoryMap: Record<string, number> = {};
@@ -286,33 +285,51 @@ const Dashboard = () => {
               <Badge className="bg-overdue text-overdue-foreground ml-auto">{milestonesMissed} milestone{milestonesMissed > 1 ? "s" : ""} missed</Badge>
             )}
           </div>
-          <div className="space-y-5">
+          <div className="space-y-6">
             {targetData.map((item, i) => (
               <div key={item.name}>
-                <div className="mb-1.5 flex items-center justify-between text-body-sm">
-                  <span className="font-medium text-foreground">{item.name}</span>
+                <div className="mb-2 flex items-center justify-between text-body-sm">
+                  <span className="font-semibold text-foreground">{item.name}</span>
                   <span className="text-muted-foreground">
-                    {formatCurrency(item.actual)} / {formatCurrency(item.topTarget)}
+                    {formatCurrency(item.actual)} spent
                   </span>
                 </div>
-                <div className="relative h-3 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${item.pct}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  {/* Milestone markers */}
-                  {item.milestones.map((m, mi) => {
-                    const pos = item.topTarget > 0 ? Math.min((m.spend / item.topTarget) * 100, 100) : 0;
-                    return <div key={mi} className="absolute top-0 h-full w-0.5 bg-foreground/30" style={{ left: `${pos}%` }} title={`${formatCurrency(m.spend)}: ${m.reward}`} />;
-                  })}
-                </div>
-                <div className="mt-1 flex items-center justify-between">
-                  <p className="text-body-xs text-muted-foreground">{item.pct}% achieved</p>
-                  <div className="flex gap-1">
-                    {item.achievedMilestones.map((m, mi) => (
-                      <Badge key={mi} variant="outline" className="text-body-xs text-success border-success/30">{m.reward}</Badge>
-                    ))}
+                {item.milestones.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {item.milestones.map((m, mi) => {
+                      const pct = m.spend > 0 ? Math.min(Math.round((item.actual / m.spend) * 100), 100) : 0;
+                      const achieved = item.actual >= m.spend;
+                      return (
+                        <div key={mi}>
+                          <div className="flex items-center justify-between text-body-xs mb-1">
+                            <span className="text-muted-foreground">
+                              {formatCurrency(m.spend)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={achieved ? "text-success font-medium" : "text-muted-foreground"}>{pct}%</span>
+                              <Badge variant="outline" className={`text-body-xs ${achieved ? "text-success border-success/30 bg-success/5" : "text-muted-foreground"}`}>
+                                {m.reward}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{
+                                width: `${pct}%`,
+                                backgroundColor: achieved ? "hsl(152, 60%, 45%)" : CHART_COLORS[i % CHART_COLORS.length],
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                ) : (
+                  <p className="text-body-xs text-muted-foreground">No milestones defined</p>
+                )}
                 {item.nextMilestone && (
-                  <p className="text-body-xs text-muted-foreground mt-0.5">
+                  <p className="text-body-xs text-muted-foreground mt-1.5">
                     Next: Spend {formatCurrency(item.nextMilestone.spend - item.actual)} more → {item.nextMilestone.reward}
                   </p>
                 )}
