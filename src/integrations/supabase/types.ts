@@ -97,6 +97,7 @@ export type Database = {
           notes: string
           statement_file_url: string | null
           statement_file_name: string | null
+          installments: Json | null
           created_at: string
           updated_at: string
         }
@@ -113,6 +114,7 @@ export type Database = {
           notes?: string
           statement_file_url?: string | null
           statement_file_name?: string | null
+          installments?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -129,6 +131,7 @@ export type Database = {
           notes?: string
           statement_file_url?: string | null
           statement_file_name?: string | null
+          installments?: Json | null
           created_at?: string
           updated_at?: string
         }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { CreditCard, Payment, Transaction } from "@/types";
+import { CreditCard, Payment, PaymentInstallment, Transaction } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -16,9 +16,28 @@ interface StoreContextType {
   addTransaction: (paymentId: string, transaction: Transaction) => void;
   updateTransaction: (paymentId: string, transaction: Transaction) => void;
   deleteTransaction: (paymentId: string, transactionId: string) => void;
+  addInstallment: (paymentId: string, installment: PaymentInstallment) => void;
+  updateInstallment: (paymentId: string, installment: PaymentInstallment) => void;
+  deleteInstallment: (paymentId: string, installmentId: string) => void;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
+
+// ── Installment helpers ────────────────────────────────────────────────────
+
+/** Derive paidAmount and paymentPaidOn from installments when they exist. */
+function deriveFromInstallments(
+  installments: PaymentInstallment[],
+  legacyPaidAmount: number,
+  legacyPaidOn: string | null
+): { paidAmount: number; paymentPaidOn: string | null } {
+  if (installments.length === 0) {
+    return { paidAmount: legacyPaidAmount, paymentPaidOn: legacyPaidOn };
+  }
+  const paidAmount = installments.reduce((s, i) => s + i.amount, 0);
+  const paymentPaidOn = [...installments].sort((a, b) => b.date.localeCompare(a.date))[0].date;
+  return { paidAmount, paymentPaidOn };
+}
 
 // ── DB row → App model mappers ─────────────────────────────────────────────
 
@@ -47,6 +66,19 @@ function mapDbCard(row: Record<string, unknown>): CreditCard {
 }
 
 function mapDbPayment(row: Record<string, unknown>, txns: Transaction[]): Payment {
+  // Parse installments from JSONB column (may not exist in older rows)
+  const rawInstallments = Array.isArray(row.installments) ? row.installments : [];
+  const installments: PaymentInstallment[] = rawInstallments.map((i: Record<string, unknown>) => ({
+    id: (i.id as string) || crypto.randomUUID(),
+    date: (i.date as string) || "",
+    amount: Number(i.amount) || 0,
+    note: (i.note as string) || "",
+  }));
+
+  const legacyPaidAmount = (row.paid_amount as number) || 0;
+  const legacyPaidOn = (row.payment_paid_on as string | null) || null;
+  const { paidAmount, paymentPaidOn } = deriveFromInstallments(installments, legacyPaidAmount, legacyPaidOn);
+
   return {
     id: row.id as string,
     cardId: row.card_id as string,
@@ -54,13 +86,14 @@ function mapDbPayment(row: Record<string, unknown>, txns: Transaction[]): Paymen
     statementDate: (row.statement_date as string) || "",
     paymentDue: (row.payment_due as number) || 0,
     paymentDeadline: (row.payment_deadline as string) || "",
-    paymentPaidOn: (row.payment_paid_on as string | null) || null,
-    paidAmount: (row.paid_amount as number) || 0,
+    paymentPaidOn,
+    paidAmount,
     status: (row.status as "Paid" | "Pending" | "Overdue") || "Pending",
     notes: (row.notes as string) || "",
     statementFileUrl: (row.statement_file_url as string | undefined) || undefined,
     statementFileName: (row.statement_file_name as string | undefined) || undefined,
     transactions: txns,
+    installments,
   };
 }
 
@@ -102,19 +135,28 @@ function cardToDb(card: CreditCard) {
 }
 
 function paymentToDb(payment: Payment) {
+  const installments = payment.installments || [];
+  const { paidAmount, paymentPaidOn } = deriveFromInstallments(
+    installments,
+    payment.paidAmount,
+    payment.paymentPaidOn
+  );
+
   return {
     id: payment.id,
     card_id: payment.cardId,
     card_name: payment.cardName,
-    statement_date: payment.statementDate,
+    // Guard against empty-string dates which cause Supabase date-column errors
+    statement_date: payment.statementDate || null,
     payment_due: payment.paymentDue,
-    payment_deadline: payment.paymentDeadline,
-    payment_paid_on: payment.paymentPaidOn,
-    paid_amount: payment.paidAmount,
+    payment_deadline: payment.paymentDeadline || null,
+    payment_paid_on: paymentPaidOn || null,
+    paid_amount: paidAmount,
     status: payment.status,
     notes: payment.notes,
     statement_file_url: payment.statementFileUrl ?? null,
     statement_file_name: payment.statementFileName ?? null,
+    installments: installments.length > 0 ? (installments as unknown as never) : null,
   };
 }
 
@@ -141,12 +183,15 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [{ data: cardsData, error: cardsErr }, { data: txnsData, error: txnsErr }, { data: paymentsData, error: paymentsErr }] =
-          await Promise.all([
-            supabase.from("credit_cards").select("*").order("created_at"),
-            supabase.from("transactions").select("*"),
-            supabase.from("payments").select("*").order("statement_date", { ascending: false }),
-          ]);
+        const [
+          { data: cardsData, error: cardsErr },
+          { data: txnsData, error: txnsErr },
+          { data: paymentsData, error: paymentsErr },
+        ] = await Promise.all([
+          supabase.from("credit_cards").select("*").order("created_at"),
+          supabase.from("transactions").select("*"),
+          supabase.from("payments").select("*").order("statement_date", { ascending: false }),
+        ]);
 
         if (cardsErr) throw cardsErr;
         if (paymentsErr) throw paymentsErr;
@@ -167,7 +212,6 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         );
       } catch (err: unknown) {
         console.error("Failed to load data from Supabase:", err);
-        // Silently fall back to empty state – user will see empty lists
       } finally {
         setLoading(false);
       }
@@ -221,24 +265,26 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
   // ── Payment CRUD ────────────────────────────────────────────────────────
 
   const addPayment = (payment: Payment) => {
-    setPayments((prev) => [payment, ...prev]);
+    const p = { ...payment, installments: payment.installments || [] };
+    setPayments((prev) => [p, ...prev]);
     supabase
       .from("payments")
-      .insert(paymentToDb(payment))
+      .insert(paymentToDb(p))
       .then(({ error }) => {
         if (error) {
-          setPayments((prev) => prev.filter((p) => p.id !== payment.id));
+          setPayments((prev) => prev.filter((x) => x.id !== p.id));
           toast({ title: "Failed to save payment", description: error.message, variant: "destructive" });
         }
       });
   };
 
   const updatePayment = (payment: Payment) => {
-    setPayments((prev) => prev.map((p) => (p.id === payment.id ? payment : p)));
+    const p = { ...payment, installments: payment.installments || [] };
+    setPayments((prev) => prev.map((x) => (x.id === p.id ? p : x)));
     supabase
       .from("payments")
-      .update(paymentToDb(payment))
-      .eq("id", payment.id)
+      .update(paymentToDb(p))
+      .eq("id", p.id)
       .then(({ error }) => {
         if (error) {
           toast({ title: "Failed to update payment", description: error.message, variant: "destructive" });
@@ -324,6 +370,53 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
       });
   };
 
+  // ── Installment CRUD (stored as JSONB on the payment row) ───────────────
+
+  const addInstallment = (paymentId: string, installment: PaymentInstallment) => {
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.id !== paymentId) return p;
+        const installments = [...(p.installments || []), installment];
+        const { paidAmount, paymentPaidOn } = deriveFromInstallments(installments, p.paidAmount, p.paymentPaidOn);
+        const updated = { ...p, installments, paidAmount, paymentPaidOn };
+        supabase.from("payments").update(paymentToDb(updated)).eq("id", paymentId).then(({ error }) => {
+          if (error) toast({ title: "Failed to save installment", description: error.message, variant: "destructive" });
+        });
+        return updated;
+      })
+    );
+  };
+
+  const updateInstallment = (paymentId: string, installment: PaymentInstallment) => {
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.id !== paymentId) return p;
+        const installments = (p.installments || []).map((i) => (i.id === installment.id ? installment : i));
+        const { paidAmount, paymentPaidOn } = deriveFromInstallments(installments, p.paidAmount, p.paymentPaidOn);
+        const updated = { ...p, installments, paidAmount, paymentPaidOn };
+        supabase.from("payments").update(paymentToDb(updated)).eq("id", paymentId).then(({ error }) => {
+          if (error) toast({ title: "Failed to update installment", description: error.message, variant: "destructive" });
+        });
+        return updated;
+      })
+    );
+  };
+
+  const deleteInstallment = (paymentId: string, installmentId: string) => {
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.id !== paymentId) return p;
+        const installments = (p.installments || []).filter((i) => i.id !== installmentId);
+        const { paidAmount, paymentPaidOn } = deriveFromInstallments(installments, 0, null);
+        const updated = { ...p, installments, paidAmount, paymentPaidOn };
+        supabase.from("payments").update(paymentToDb(updated)).eq("id", paymentId).then(({ error }) => {
+          if (error) toast({ title: "Failed to delete installment", description: error.message, variant: "destructive" });
+        });
+        return updated;
+      })
+    );
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -339,6 +432,9 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         addTransaction,
         updateTransaction,
         deleteTransaction,
+        addInstallment,
+        updateInstallment,
+        deleteInstallment,
       }}
     >
       {children}

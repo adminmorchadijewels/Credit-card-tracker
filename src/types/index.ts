@@ -34,6 +34,13 @@ export interface Transaction {
   remark: string;
 }
 
+export interface PaymentInstallment {
+  id: string;
+  date: string;
+  amount: number;
+  note: string;
+}
+
 export interface Payment {
   id: string;
   cardId: string;
@@ -41,13 +48,16 @@ export interface Payment {
   statementDate: string;
   paymentDue: number;
   paymentDeadline: string;
+  /** @deprecated use installments instead; kept for backward-compat with legacy records */
   paymentPaidOn: string | null;
+  /** @deprecated use installments instead; kept for backward-compat with legacy records */
   paidAmount: number;
   status: "Paid" | "Pending" | "Overdue";
   notes: string;
   statementFileUrl?: string;
   statementFileName?: string;
   transactions: Transaction[];
+  installments: PaymentInstallment[];
 }
 
 export type PaymentStatus = Payment["status"];

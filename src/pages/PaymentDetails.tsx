@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import { useStore } from "@/data/store";
-import { Payment, Transaction } from "@/types";
+import { Payment, PaymentInstallment, Transaction } from "@/types";
 import { formatCurrency, formatDate, generateId } from "@/utils/formatters";
-import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp, Download, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp, Download, FileDown, Banknote } from "lucide-react";
 import {
   exportPaymentsCSV,
   downloadPaymentsSample,
@@ -34,7 +34,7 @@ const statusStyles: Record<string, string> = {
 const TRANSACTION_CATEGORIES = ["Travel", "Dining", "Shopping", "Groceries", "Fuel", "Bills", "Entertainment", "Health", "Education", "Other"];
 
 const PaymentDetails = () => {
-  const { cards, payments, addPayment, updatePayment, deletePayment, addTransaction, updateTransaction, deleteTransaction, loading } = useStore();
+  const { cards, payments, addPayment, updatePayment, deletePayment, addTransaction, updateTransaction, deleteTransaction, addInstallment, updateInstallment, deleteInstallment, loading } = useStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [cardFilter, setCardFilter] = useState("");
@@ -49,11 +49,14 @@ const PaymentDetails = () => {
   const importRef = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [chatPayment, setChatPayment] = useState<Payment | null>(null);
+  const [installModalPayment, setInstallModalPayment] = useState<Payment | null>(null);
+  const [installForm, setInstallForm] = useState<{ date: string; amount: number; note: string }>({ date: "", amount: 0, note: "" });
+  const [editingInstall, setEditingInstall] = useState<PaymentInstallment | null>(null);
 
   const [form, setForm] = useState<Payment>({
     id: generateId(), cardId: "", cardName: "",
     statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
-    paidAmount: 0, status: "Pending", notes: "", transactions: [],
+    paidAmount: 0, status: "Pending", notes: "", transactions: [], installments: [],
   });
 
   if (loading) {
@@ -70,7 +73,7 @@ const PaymentDetails = () => {
   const emptyPayment: Payment = {
     id: generateId(), cardId: cards[0]?.id || "", cardName: cards[0]?.cardName || "",
     statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
-    paidAmount: 0, status: "Pending", notes: "", transactions: [],
+    paidAmount: 0, status: "Pending", notes: "", transactions: [], installments: [],
   };
 
   const filtered = payments.filter((p) => {
@@ -91,7 +94,7 @@ const PaymentDetails = () => {
     setEditingPayment(null);
     setForm({ id: generateId(), cardId: cards[0]?.id || "", cardName: cards[0]?.cardName || "",
       statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
-      paidAmount: 0, status: "Pending", notes: "", transactions: [] });
+      paidAmount: 0, status: "Pending", notes: "", transactions: [], installments: [] });
     setModalOpen(true);
   };
 
@@ -183,6 +186,34 @@ const PaymentDetails = () => {
     setTxnModalOpen(false);
   };
 
+  const openInstallModal = (p: Payment) => {
+    // Sync installModalPayment with the latest state from payments store
+    setInstallModalPayment(p);
+    setInstallForm({ date: "", amount: 0, note: "" });
+    setEditingInstall(null);
+  };
+
+  const handleInstallSave = () => {
+    if (!installForm.date || installForm.amount <= 0) {
+      toast({ title: "Validation Error", description: "Date and Amount are required.", variant: "destructive" });
+      return;
+    }
+    if (!installModalPayment) return;
+    if (editingInstall) {
+      updateInstallment(installModalPayment.id, { ...editingInstall, ...installForm });
+      toast({ title: "Installment updated" });
+    } else {
+      addInstallment(installModalPayment.id, { id: generateId(), ...installForm });
+      toast({ title: "Installment added" });
+    }
+    setInstallForm({ date: "", amount: 0, note: "" });
+    setEditingInstall(null);
+    // Keep modal open so user can add more; also sync latest payment state
+    setInstallModalPayment((prev) =>
+      prev ? (payments.find((p) => p.id === prev.id) ?? prev) : null
+    );
+  };
+
   const handleImportPayments = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -198,10 +229,18 @@ const PaymentDetails = () => {
       const existingIds = new Set(payments.map((p) => p.id));
       imported.forEach((p) => {
         if (existingIds.has(p.id)) {
-          updatePayment(p);
+          // Merge: preserve fields not present in CSV to avoid data loss
+          const existing = payments.find((ep) => ep.id === p.id);
+          updatePayment({
+            ...p,
+            transactions: existing?.transactions ?? [],
+            installments: existing?.installments ?? [],
+            statementFileUrl: p.statementFileUrl ?? existing?.statementFileUrl,
+            statementFileName: p.statementFileName ?? existing?.statementFileName,
+          });
           updated++;
         } else {
-          addPayment(p);
+          addPayment({ ...p, installments: [] });
           added++;
         }
       });
@@ -303,16 +342,30 @@ const PaymentDetails = () => {
                   </div>
                   <div>
                     <p className="text-body-xs text-muted-foreground">Paid Amount</p>
-                    <Input type="number" value={p.paidAmount} className="h-8 mt-0.5"
-                      onChange={(e) => { const u = { ...p, paidAmount: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    {p.installments.length > 0 ? (
+                      <p className="text-body-sm font-medium mt-0.5">{formatCurrency(p.paidAmount)}</p>
+                    ) : (
+                      <Input type="number" value={p.paidAmount} className="h-8 mt-0.5"
+                        onChange={(e) => { const u = { ...p, paidAmount: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    )}
                   </div>
                   <div className="col-span-2">
-                    <p className="text-body-xs text-muted-foreground">Paid On</p>
-                    <Input type="date" value={p.paymentPaidOn || ""} className="h-8 mt-0.5"
-                      onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    <p className="text-body-xs text-muted-foreground">
+                      Paid On{p.installments.length > 0 ? ` (${p.installments.length} payment${p.installments.length !== 1 ? "s" : ""})` : ""}
+                    </p>
+                    {p.installments.length > 0 ? (
+                      <p className="text-body-sm mt-0.5">{p.paymentPaidOn ? formatDate(p.paymentPaidOn) : "—"}</p>
+                    ) : (
+                      <Input type="date" value={p.paymentPaidOn || ""} className="h-8 mt-0.5"
+                        onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  <Button variant="outline" size="sm" className="h-7 text-body-xs gap-1" onClick={() => openInstallModal(p)}>
+                    <Banknote size={12} />
+                    Payments{p.installments.length > 0 ? ` (${p.installments.length})` : ""}
+                  </Button>
                   {p.statementFileName ? (
                     <a href={p.statementFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline text-body-xs">
                       <FileText size={14} /> {p.statementFileName}
@@ -323,7 +376,7 @@ const PaymentDetails = () => {
                       <Upload size={12} /> {uploadingFor === p.id ? "Uploading..." : "Upload"}
                     </Button>
                   )}
-                  {displayStatus !== "Paid" && (
+                  {displayStatus !== "Paid" && p.installments.length === 0 && (
                     <Button variant="ghost" size="sm" className="h-7 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>Mark Paid</Button>
                   )}
                   {p.statementFileUrl && (
@@ -421,12 +474,25 @@ const PaymentDetails = () => {
                         onChange={(e) => { const u = { ...p, paymentDeadline: e.target.value }; updatePayment({ ...u, status: computeStatus(u) }); }} />
                     </td>
                     <td className="px-4 py-3">
-                      <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[150px] min-w-[150px]"
-                        onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                      {p.installments.length > 0 ? (
+                        <button onClick={() => openInstallModal(p)}
+                          className="flex items-center gap-1.5 text-body-xs text-primary hover:underline">
+                          <Banknote size={13} />
+                          {formatDate(p.paymentPaidOn || "")}
+                          <span className="text-muted-foreground">({p.installments.length})</span>
+                        </button>
+                      ) : (
+                        <Input type="date" value={p.paymentPaidOn || ""} className="h-8 w-[150px] min-w-[150px]"
+                          onChange={(e) => { const u = { ...p, paymentPaidOn: e.target.value || null }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <Input type="number" value={p.paidAmount} className="h-8 w-[100px]"
-                        onChange={(e) => { const u = { ...p, paidAmount: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                      {p.installments.length > 0 ? (
+                        <span className="text-body-sm font-medium">{formatCurrency(p.paidAmount)}</span>
+                      ) : (
+                        <Input type="number" value={p.paidAmount} className="h-8 w-[100px]"
+                          onChange={(e) => { const u = { ...p, paidAmount: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge className={statusStyles[displayStatus]}>{displayStatus}</Badge>
@@ -448,8 +514,12 @@ const PaymentDetails = () => {
                         onChange={(e) => updatePayment({ ...p, notes: e.target.value })} />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        {displayStatus !== "Paid" && (
+                      <div className="flex flex-wrap gap-1">
+                        <Button variant="outline" size="sm" className="h-8 text-body-xs gap-1" onClick={() => openInstallModal(p)}>
+                          <Banknote size={13} />
+                          Payments{p.installments.length > 0 ? ` (${p.installments.length})` : ""}
+                        </Button>
+                        {displayStatus !== "Paid" && p.installments.length === 0 && (
                           <Button variant="ghost" size="sm" className="h-8 text-body-xs text-success" onClick={() => handleMarkPaid(p)}>
                             Mark Paid
                           </Button>
@@ -647,6 +717,124 @@ const PaymentDetails = () => {
       {chatPayment && (
         <StatementChat payment={chatPayment} onClose={() => setChatPayment(null)} />
       )}
+
+      {/* Payment Installments Modal */}
+      {(() => {
+        // Always read the freshest copy from the payments store
+        const livePayment = payments.find((p) => p.id === installModalPayment?.id) ?? installModalPayment;
+        const installments = livePayment?.installments ?? [];
+        const totalPaid = installments.reduce((s, i) => s + i.amount, 0);
+        const remaining = Math.max(0, (livePayment?.paymentDue ?? 0) - totalPaid);
+        return (
+          <Dialog open={!!installModalPayment} onOpenChange={(open) => { if (!open) { setInstallModalPayment(null); setEditingInstall(null); setInstallForm({ date: "", amount: 0, note: "" }); } }}>
+            <DialogContent className="w-full max-w-[95vw] sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Banknote size={18} className="text-primary" />
+                  Payment Installments
+                  {livePayment && <span className="text-muted-foreground font-normal text-sm">— {livePayment.cardName}</span>}
+                </DialogTitle>
+              </DialogHeader>
+
+              {/* Summary bar */}
+              {livePayment && (
+                <div className="flex flex-wrap gap-4 rounded-lg bg-muted/40 px-4 py-3 text-body-sm">
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Due</p>
+                    <p className="font-semibold">{formatCurrency(livePayment.paymentDue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Paid</p>
+                    <p className="font-semibold text-success">{formatCurrency(totalPaid)}</p>
+                  </div>
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Remaining</p>
+                    <p className={`font-semibold ${remaining > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(remaining)}</p>
+                  </div>
+                  <div>
+                    <p className="text-body-xs text-muted-foreground">Installments</p>
+                    <p className="font-semibold">{installments.length}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Installments list */}
+              {installments.length > 0 ? (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
+                  <table className="w-full text-body-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        {["Date", "Amount", "Note", ""].map((h) => (
+                          <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...installments].sort((a, b) => a.date.localeCompare(b.date)).map((inst) => (
+                        <tr key={inst.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                          <td className="px-3 py-2 whitespace-nowrap">{formatDate(inst.date)}</td>
+                          <td className="px-3 py-2 font-medium">{formatCurrency(inst.amount)}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{inst.note || "—"}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="icon" className="h-6 w-6"
+                                onClick={() => { setEditingInstall(inst); setInstallForm({ date: inst.date, amount: inst.amount, note: inst.note }); }}>
+                                <Pencil size={11} />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"
+                                onClick={() => { if (livePayment) { deleteInstallment(livePayment.id, inst.id); toast({ title: "Installment removed" }); } }}>
+                                <Trash2 size={11} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-body-xs text-muted-foreground text-center py-4 rounded-lg border border-border border-dashed">
+                  No installments yet. Add the first payment below.
+                </p>
+              )}
+
+              {/* Add / Edit form */}
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <p className="text-body-xs font-semibold text-foreground">
+                  {editingInstall ? "Edit Installment" : "Add Installment"}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-body-xs">Date *</Label>
+                    <Input type="date" value={installForm.date}
+                      onChange={(e) => setInstallForm((f) => ({ ...f, date: e.target.value }))} className="h-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-body-xs">Amount (₹) *</Label>
+                    <Input type="number" value={installForm.amount || ""}
+                      onChange={(e) => setInstallForm((f) => ({ ...f, amount: Number(e.target.value) }))} className="h-8" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-body-xs">Note</Label>
+                  <Input value={installForm.note} placeholder="e.g. Partial payment, NEFT…"
+                    onChange={(e) => setInstallForm((f) => ({ ...f, note: e.target.value }))} className="h-8" />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  {editingInstall && (
+                    <Button variant="ghost" size="sm" onClick={() => { setEditingInstall(null); setInstallForm({ date: "", amount: 0, note: "" }); }}>
+                      Cancel Edit
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={handleInstallSave}>
+                    {editingInstall ? "Update" : "Add Installment"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Delete Confirmation */}
       {(() => {
