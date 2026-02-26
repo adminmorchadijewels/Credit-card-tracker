@@ -32,7 +32,7 @@ export const MetricCard = ({ title, value, trend, trendLabel, icon, accent = "pr
   return (
     <div
       className={cn(
-        "animate-fade-in rounded-xl border bg-gradient-to-br p-5 transition-shadow hover:shadow-lg",
+        "h-full animate-fade-in rounded-xl border bg-gradient-to-br p-5 transition-shadow hover:shadow-lg",
         accentStyles[accent]
       )}
     >
@@ -40,13 +40,17 @@ export const MetricCard = ({ title, value, trend, trendLabel, icon, accent = "pr
         <div className="space-y-3">
           <p className="text-body-sm font-medium text-muted-foreground">{title}</p>
           <p className="text-2xl font-bold tracking-tight text-foreground">{value}</p>
-          {trend !== undefined && (
-            <div className={cn("flex items-center gap-1 text-body-xs font-medium", trendColor)}>
-              <TrendIcon size={14} />
-              <span>{Math.abs(trend)}%</span>
-              {trendLabel && <span className="text-muted-foreground ml-1">{trendLabel}</span>}
-            </div>
-          )}
+          <div className={cn("flex items-center gap-1 text-body-xs font-medium", trendColor)}>
+            {trend !== undefined ? (
+              <>
+                <TrendIcon size={14} />
+                <span>{Math.abs(trend)}%</span>
+                {trendLabel && <span className="text-muted-foreground ml-1">{trendLabel}</span>}
+              </>
+            ) : (
+              <span className="invisible select-none">—</span>
+            )}
+          </div>
         </div>
         <div className={cn("rounded-xl p-3", iconBgStyles[accent])}>
           {icon}

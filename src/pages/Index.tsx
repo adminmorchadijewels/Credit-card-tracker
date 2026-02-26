@@ -169,6 +169,7 @@ const Dashboard = () => {
 
   // ── KPI metrics ───────────────────────────────────────────────────────────
   const totalSpend = fyPayments.reduce((s, p) => s + p.paymentDue, 0);
+  const totalPaid = fyPayments.reduce((s, p) => s + p.paidAmount, 0);
   const activeCards = activeCardsList.length;
   const missedPayments = fyPayments.filter((p) => {
     const status =
@@ -359,7 +360,7 @@ const Dashboard = () => {
       </div>
 
       {/* ── KPI cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3 lg:grid-cols-5">
         {[
           {
             title: "Total Spend",
@@ -370,10 +371,17 @@ const Dashboard = () => {
             accent: "primary" as const,
           },
           {
+            title: "Total Paid",
+            value: formatCurrency(totalPaid),
+            trendLabel: fy.label,
+            icon: <CheckCircle2 size={22} />,
+            accent: "success" as const,
+          },
+          {
             title: "Active Cards",
             value: String(activeCards),
             icon: <CreditCard size={22} />,
-            accent: "success" as const,
+            accent: "secondary" as const,
           },
           {
             title: "Missed Payments",
@@ -392,7 +400,7 @@ const Dashboard = () => {
         ].map((card, i) => (
           <div
             key={card.title}
-            className="animate-fade-in"
+            className="h-full animate-fade-in"
             style={{ animationDelay: `${i * 80}ms` }}
           >
             <MetricCard {...card} />
