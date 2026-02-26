@@ -53,6 +53,16 @@ function downloadFile(content: string, filename: string) {
 
 const today = () => new Date().toISOString().split("T")[0];
 
+/** Normalize dates to YYYY-MM-DD regardless of input format.
+ *  Accepts: YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY */
+function normalizeDate(raw: string): string {
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw; // already ISO
+  const m = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return raw;
+}
+
 // ── Cards ─────────────────────────────────────────────────────────────────────
 // Column labels match the UI table headers exactly.
 // Legacy camelCase keys (old exports) are accepted as fallback during import.
@@ -261,10 +271,10 @@ export function importPaymentsCSV(
       id: idVal || crypto.randomUUID(),
       cardId,
       cardName: get("Card Name") || cardMap[cardId] || "",
-      statementDate,
+      statementDate: normalizeDate(statementDate),
       paymentDue: Number(get("Due Amount")) || 0,
-      paymentDeadline: get("Deadline"),
-      paymentPaidOn: get("Paid On") || null,
+      paymentDeadline: normalizeDate(get("Deadline")),
+      paymentPaidOn: normalizeDate(get("Paid On")) || null,
       paidAmount: Number(get("Paid Amount")) || 0,
       status: (get("Status") as Payment["status"]) || "Pending",
       notes: get("Notes"),
