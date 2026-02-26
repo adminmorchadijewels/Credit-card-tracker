@@ -59,6 +59,13 @@ const PaymentDetails = () => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortField(field); setSortDir("asc"); }
   };
+  type TxnSortField = "date" | "category" | "amount" | "remark";
+  const [txnSortField, setTxnSortField] = useState<TxnSortField>("date");
+  const [txnSortDir, setTxnSortDir] = useState<"asc" | "desc">("asc");
+  const handleTxnSort = (field: TxnSortField) => {
+    if (txnSortField === field) setTxnSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setTxnSortField(field); setTxnSortDir("asc"); }
+  };
 
   const [form, setForm] = useState<Payment>({
     id: generateId(), cardId: "", cardName: "",
@@ -419,7 +426,13 @@ const PaymentDetails = () => {
                   {undefinedAmt > 0 && (
                     <p className="text-body-xs text-muted-foreground">Unaccounted: <strong className="text-warning">{formatCurrency(undefinedAmt)}</strong></p>
                   )}
-                  {txns.length > 0 ? txns.map((t) => (
+                  {txns.length > 0 ? [...txns].sort((a, b) => {
+                    const dir = txnSortDir === "asc" ? 1 : -1;
+                    const av = (a[txnSortField] ?? "") as string | number;
+                    const bv = (b[txnSortField] ?? "") as string | number;
+                    if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
+                    return ((av as number) - (bv as number)) * dir;
+                  }).map((t) => (
                     <div key={t.id} className="flex items-start justify-between rounded-lg border border-border bg-card p-3">
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
@@ -598,13 +611,38 @@ const PaymentDetails = () => {
                           <table className="w-full text-body-xs">
                             <thead>
                               <tr className="border-b border-border">
-                                {["Date", "Category", "Amount", "Remark", "Actions"].map((h) => (
-                                  <th key={h} className="px-3 py-2 text-left font-semibold text-muted-foreground">{h}</th>
+                                {(
+                                  [
+                                    { label: "Date", field: "date" },
+                                    { label: "Category", field: "category" },
+                                    { label: "Amount", field: "amount" },
+                                    { label: "Remark", field: "remark" },
+                                    { label: "Actions", field: null },
+                                  ] as { label: string; field: TxnSortField | null }[]
+                                ).map(({ label, field }) => (
+                                  <th
+                                    key={label}
+                                    onClick={field ? () => handleTxnSort(field) : undefined}
+                                    className={`px-3 py-2 text-left font-semibold text-muted-foreground ${field ? "cursor-pointer hover:text-foreground select-none" : ""}`}
+                                  >
+                                    <span className="inline-flex items-center gap-1">
+                                      {label}
+                                      {field && txnSortField === field && (
+                                        txnSortDir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />
+                                      )}
+                                    </span>
+                                  </th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody>
-                              {txns.map((t) => (
+                              {[...txns].sort((a, b) => {
+                                const dir = txnSortDir === "asc" ? 1 : -1;
+                                const av = (a[txnSortField] ?? "") as string | number;
+                                const bv = (b[txnSortField] ?? "") as string | number;
+                                if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
+                                return ((av as number) - (bv as number)) * dir;
+                              }).map((t) => (
                                 <tr key={t.id} className="border-b border-border last:border-0">
                                   <td className="px-3 py-2">{formatDate(t.date)}</td>
                                   <td className="px-3 py-2">

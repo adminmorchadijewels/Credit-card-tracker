@@ -54,14 +54,42 @@ function downloadFile(content: string, filename: string) {
 const today = () => new Date().toISOString().split("T")[0];
 
 // ── Cards ─────────────────────────────────────────────────────────────────────
+// Column labels match the UI table headers exactly.
+// Legacy camelCase keys (old exports) are accepted as fallback during import.
 
-const CARD_HEADERS = [
-  "id", "cardName", "parentId", "bank", "ownedBy", "email",
-  "customerCare", "registeredNo", "cardLimit", "cardStatus",
-  "limitShared", "billGenerationDay", "billPaymentDate",
-  "annualCharges", "annualCycleReset", "rewardPointsExpiryDays",
-  "milestoneRewards", "generalRewards", "targetMilestones",
-];
+const CARD_COL_MAP = [
+  { label: "Card ID",            legacy: "id" },
+  { label: "Card Name",          legacy: "cardName" },
+  { label: "Parent ID",          legacy: "parentId" },
+  { label: "Bank",               legacy: "bank" },
+  { label: "Owner",              legacy: "ownedBy" },
+  { label: "Email",              legacy: "email" },
+  { label: "Customer Care",      legacy: "customerCare" },
+  { label: "Registered No",      legacy: "registeredNo" },
+  { label: "Card Limit",         legacy: "cardLimit" },
+  { label: "Status",             legacy: "cardStatus" },
+  { label: "Limit Shared",       legacy: "limitShared" },
+  { label: "Bill Gen Day",       legacy: "billGenerationDay" },
+  { label: "Bill Pay Day",       legacy: "billPaymentDate" },
+  { label: "Annual Charges",     legacy: "annualCharges" },
+  { label: "Annual Cycle Reset", legacy: "annualCycleReset" },
+  { label: "Expiry (days)",      legacy: "rewardPointsExpiryDays" },
+  { label: "Milestone Rewards",  legacy: "milestoneRewards" },
+  { label: "General Rewards",    legacy: "generalRewards" },
+  { label: "Target Milestones",  legacy: "targetMilestones" },
+] as const;
+
+const CARD_HEADERS = CARD_COL_MAP.map((c) => c.label);
+
+/** Build a field getter that resolves both new UI label and old camelCase key. */
+function makeCardGetter(headers: string[], row: string[]) {
+  return (colLabel: string): string => {
+    const map = CARD_COL_MAP.find((c) => c.label === colLabel);
+    let idx = headers.indexOf(colLabel);
+    if (idx === -1 && map) idx = headers.indexOf(map.legacy);
+    return (row[idx] ?? "").trim();
+  };
+}
 
 export function exportCardsCSV(cards: CreditCard[]) {
   const rows = [
@@ -108,53 +136,74 @@ export function importCardsCSV(
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (row.length < 2 || row.every((c) => !c.trim())) continue;
-    const get = (key: string) => (row[headers.indexOf(key)] ?? "").trim();
+    const get = makeCardGetter(headers, row);
 
-    const cardName = get("cardName");
-    const bank = get("bank");
+    const cardName = get("Card Name");
+    const bank = get("Bank");
     if (!cardName || !bank) {
-      errors.push(`Row ${i + 1}: cardName and bank are required.`);
+      errors.push(`Row ${i + 1}: "Card Name" and "Bank" are required.`);
       continue;
     }
 
     let targetMilestones: { spend: number; reward: string }[] = [{ spend: 0, reward: "" }];
     try {
-      const parsed = JSON.parse(get("targetMilestones") || "[]");
+      const parsed = JSON.parse(get("Target Milestones") || "[]");
       if (Array.isArray(parsed) && parsed.length > 0) targetMilestones = parsed;
     } catch { /* keep default */ }
 
-    const idVal = get("id");
+    const idVal = get("Card ID");
     cards.push({
       id: idVal || crypto.randomUUID(),
-      parentId: get("parentId"),
+      parentId: get("Parent ID"),
       cardName,
-      cardStatus: (get("cardStatus") as "Active" | "Inactive") || "Active",
-      ownedBy: get("ownedBy"),
+      cardStatus: (get("Status") as "Active" | "Inactive") || "Active",
+      ownedBy: get("Owner"),
       bank,
-      customerCare: get("customerCare"),
-      billGenerationDay: Number(get("billGenerationDay")) || 1,
-      billPaymentDate: Number(get("billPaymentDate")) || 20,
-      limitShared: get("limitShared") === "true",
-      milestoneRewards: get("milestoneRewards"),
-      generalRewards: get("generalRewards"),
+      customerCare: get("Customer Care"),
+      billGenerationDay: Number(get("Bill Gen Day")) || 1,
+      billPaymentDate: Number(get("Bill Pay Day")) || 20,
+      limitShared: get("Limit Shared") === "true",
+      milestoneRewards: get("Milestone Rewards"),
+      generalRewards: get("General Rewards"),
       targetMilestones,
-      annualCharges: Number(get("annualCharges")) || 0,
-      registeredNo: get("registeredNo"),
-      email: get("email"),
-      annualCycleReset: get("annualCycleReset"),
-      cardLimit: Number(get("cardLimit")) || 0,
-      rewardPointsExpiryDays: Number(get("rewardPointsExpiryDays")) || 365,
+      annualCharges: Number(get("Annual Charges")) || 0,
+      registeredNo: get("Registered No"),
+      email: get("Email"),
+      annualCycleReset: get("Annual Cycle Reset"),
+      cardLimit: Number(get("Card Limit")) || 0,
+      rewardPointsExpiryDays: Number(get("Expiry (days)")) || 365,
     });
   }
   return { cards, errors };
 }
 
 // ── Payments ──────────────────────────────────────────────────────────────────
+// Column labels match the UI table headers exactly.
+// Legacy camelCase keys (old exports) are accepted as fallback during import.
 
-const PAYMENT_HEADERS = [
-  "id", "cardId", "cardName", "statementDate", "paymentDue",
-  "paymentDeadline", "paymentPaidOn", "paidAmount", "status", "notes",
-];
+const PAYMENT_COL_MAP = [
+  { label: "Payment ID",     legacy: "id" },
+  { label: "Card ID",        legacy: "cardId" },
+  { label: "Card Name",      legacy: "cardName" },
+  { label: "Statement Date", legacy: "statementDate" },
+  { label: "Due Amount",     legacy: "paymentDue" },
+  { label: "Deadline",       legacy: "paymentDeadline" },
+  { label: "Paid On",        legacy: "paymentPaidOn" },
+  { label: "Paid Amount",    legacy: "paidAmount" },
+  { label: "Status",         legacy: "status" },
+  { label: "Notes",          legacy: "notes" },
+] as const;
+
+const PAYMENT_HEADERS = PAYMENT_COL_MAP.map((c) => c.label);
+
+function makePaymentGetter(headers: string[], row: string[]) {
+  return (colLabel: string): string => {
+    const map = PAYMENT_COL_MAP.find((c) => c.label === colLabel);
+    let idx = headers.indexOf(colLabel);
+    if (idx === -1 && map) idx = headers.indexOf(map.legacy);
+    return (row[idx] ?? "").trim();
+  };
+}
 
 export function exportPaymentsCSV(payments: Payment[]) {
   const rows = [
@@ -198,27 +247,27 @@ export function importPaymentsCSV(
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (row.length < 2 || row.every((c) => !c.trim())) continue;
-    const get = (key: string) => (row[headers.indexOf(key)] ?? "").trim();
+    const get = makePaymentGetter(headers, row);
 
-    const cardId = get("cardId");
-    const statementDate = get("statementDate");
+    const cardId = get("Card ID");
+    const statementDate = get("Statement Date");
     if (!cardId || !statementDate) {
-      errors.push(`Row ${i + 1}: cardId and statementDate are required.`);
+      errors.push(`Row ${i + 1}: "Card ID" and "Statement Date" are required.`);
       continue;
     }
 
-    const idVal = get("id");
+    const idVal = get("Payment ID");
     payments.push({
       id: idVal || crypto.randomUUID(),
       cardId,
-      cardName: get("cardName") || cardMap[cardId] || "",
+      cardName: get("Card Name") || cardMap[cardId] || "",
       statementDate,
-      paymentDue: Number(get("paymentDue")) || 0,
-      paymentDeadline: get("paymentDeadline"),
-      paymentPaidOn: get("paymentPaidOn") || null,
-      paidAmount: Number(get("paidAmount")) || 0,
-      status: (get("status") as Payment["status"]) || "Pending",
-      notes: get("notes"),
+      paymentDue: Number(get("Due Amount")) || 0,
+      paymentDeadline: get("Deadline"),
+      paymentPaidOn: get("Paid On") || null,
+      paidAmount: Number(get("Paid Amount")) || 0,
+      status: (get("Status") as Payment["status"]) || "Pending",
+      notes: get("Notes"),
       transactions: [],
     });
   }

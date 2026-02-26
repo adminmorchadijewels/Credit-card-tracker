@@ -146,10 +146,10 @@ function paymentToDb(payment: Payment) {
     id: payment.id,
     card_id: payment.cardId,
     card_name: payment.cardName,
-    // Guard against empty-string dates which cause Supabase date-column errors
-    statement_date: payment.statementDate || null,
+    // statement_date and payment_deadline are TEXT NOT NULL – send "" not null
+    statement_date: payment.statementDate || "",
     payment_due: payment.paymentDue,
-    payment_deadline: payment.paymentDeadline || null,
+    payment_deadline: payment.paymentDeadline || "",
     payment_paid_on: paymentPaidOn || null,
     paid_amount: paidAmount,
     status: payment.status,
