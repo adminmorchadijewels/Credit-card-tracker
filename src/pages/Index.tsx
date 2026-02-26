@@ -6,7 +6,7 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import {
   Wallet, CreditCard, AlertTriangle, TrendingUp, Target, CalendarDays,
   CheckCircle2, XCircle, BarChart3, PieChart as PieChartIcon,
-  ChevronDown, SlidersHorizontal,
+  ChevronDown, SlidersHorizontal, ReceiptText, Clock, Bell,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -192,6 +192,32 @@ const Dashboard = () => {
         )
       : 0;
 
+  const outstandingBalance = Math.max(0, totalSpend - totalPaid);
+
+  // ── Due this week (unpaid, deadline within 7 days or already overdue) ─────
+  const dueThisWeek = payments
+    .filter((p) => {
+      if (!p.paymentDeadline) return false;
+      const deadline = new Date(p.paymentDeadline);
+      const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return p.paidAmount < p.paymentDue && daysUntil <= 7;
+    })
+    .sort((a, b) => new Date(a.paymentDeadline).getTime() - new Date(b.paymentDeadline).getTime());
+
+  // ── Annual fee reminders (active cards with fee due in next 60 days) ──────
+  const annualFeeReminders = cards
+    .filter((c) => c.annualCharges > 0 && c.annualCycleReset && c.cardStatus === "Active")
+    .map((c) => {
+      const reset = new Date(c.annualCycleReset);
+      const thisYear = now.getFullYear();
+      let next = new Date(thisYear, reset.getMonth(), reset.getDate());
+      if (next <= now) next = new Date(thisYear + 1, reset.getMonth(), reset.getDate());
+      const daysUntil = Math.ceil((next.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      return { card: c, nextDate: next, daysUntil };
+    })
+    .filter((r) => r.daysUntil <= 60)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+
   // ── Filter option lists ───────────────────────────────────────────────────
   const cardOptions = activeCardsList.map((c) => ({ value: c.id, label: c.cardName }));
   const ownerOptions = [
@@ -360,7 +386,7 @@ const Dashboard = () => {
       </div>
 
       {/* ── KPI cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 xl:grid-cols-6">
         {[
           {
             title: "Total Spend",
@@ -376,6 +402,12 @@ const Dashboard = () => {
             trendLabel: fy.label,
             icon: <CheckCircle2 size={22} />,
             accent: "success" as const,
+          },
+          {
+            title: "Outstanding",
+            value: formatCurrency(outstandingBalance),
+            icon: <ReceiptText size={22} />,
+            accent: outstandingBalance > 0 ? "warning" as const : "success" as const,
           },
           {
             title: "Active Cards",
@@ -407,6 +439,55 @@ const Dashboard = () => {
           </div>
         ))}
       </div>
+
+      {/* ── Due This Week ──────────────────────────────────────────────── */}
+      {dueThisWeek.length > 0 && (
+        <div className="rounded-xl border border-warning/40 bg-warning/5 p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock size={18} className="text-warning shrink-0" />
+            <h3 className="text-base font-semibold text-card-foreground">Due This Week</h3>
+            <Badge className="bg-warning text-warning-foreground ml-1">{dueThisWeek.length}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {dueThisWeek.map((p) => {
+              const deadline = new Date(p.paymentDeadline);
+              const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              const isOverdue = daysUntil < 0;
+              return (
+                <div key={p.id} className={`flex-1 min-w-[160px] rounded-lg border p-3 ${isOverdue ? "border-destructive/40 bg-destructive/5" : "border-warning/40 bg-warning/10"}`}>
+                  <p className="font-medium text-body-sm text-foreground">{p.cardName}</p>
+                  <p className={`text-body-xs font-semibold mt-0.5 ${isOverdue ? "text-destructive" : "text-warning"}`}>
+                    {isOverdue ? `${Math.abs(daysUntil)}d overdue` : daysUntil === 0 ? "Due today" : `Due in ${daysUntil}d`}
+                  </p>
+                  <p className="text-body-xs text-muted-foreground mt-0.5">{formatCurrency(p.paymentDue - p.paidAmount)} remaining</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Annual Fee Reminders ────────────────────────────────────────── */}
+      {annualFeeReminders.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+          <div className="mb-3 flex items-center gap-2">
+            <Bell size={18} className="text-primary shrink-0" />
+            <h3 className="text-base font-semibold text-card-foreground">Annual Fee Reminders</h3>
+            <span className="text-body-xs text-muted-foreground ml-1">Next 60 days</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {annualFeeReminders.map(({ card, nextDate, daysUntil }) => (
+              <div key={card.id} className="flex-1 min-w-[160px] rounded-lg border border-border bg-background p-3">
+                <p className="font-medium text-body-sm text-foreground">{card.cardName}</p>
+                <p className="text-body-xs text-muted-foreground mt-0.5">{formatCurrency(card.annualCharges)} fee</p>
+                <p className={`text-body-xs font-medium mt-0.5 ${daysUntil <= 14 ? "text-warning" : "text-primary"}`}>
+                  {daysUntil === 0 ? "Due today" : `In ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`} · {nextDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Statement Timeline ─────────────────────────────────────────── */}
       <div className={sectionCard}>

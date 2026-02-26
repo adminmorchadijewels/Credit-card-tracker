@@ -2,9 +2,10 @@ import { useState, useRef } from "react";
 import { useStore } from "@/data/store";
 import { Payment, PaymentInstallment, Transaction } from "@/types";
 import { formatCurrency, formatDate, generateId } from "@/utils/formatters";
-import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp, Download, FileDown, Banknote } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Upload, FileText, ChevronDown, ChevronUp, Download, FileDown, Banknote, AlertTriangle } from "lucide-react";
 import {
   exportPaymentsCSV,
+  exportPaymentsWithTransactionsCSV,
   downloadPaymentsSample,
   importPaymentsCSV,
 } from "@/lib/import-export";
@@ -161,6 +162,47 @@ const PaymentDetails = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  /** When selecting a card in Add mode, pre-fill next statement & deadline dates
+   *  based on the card's last payment and bill gen / pay days. */
+  const handleCardSelectInModal = (cardId: string) => {
+    const card = cards.find((c) => c.id === cardId);
+    if (!editingPayment) {
+      const lastPayment = [...payments]
+        .filter((p) => p.cardId === cardId)
+        .sort((a, b) => b.statementDate.localeCompare(a.statementDate))[0];
+      if (lastPayment) {
+        const lastStat = new Date(lastPayment.statementDate);
+        const genDay = card?.billGenerationDay || lastStat.getDate();
+        const payDay = card?.billPaymentDate || 20;
+        const nextStatMonth = (lastStat.getMonth() + 1) % 12;
+        const nextStatYear = lastStat.getMonth() === 11 ? lastStat.getFullYear() + 1 : lastStat.getFullYear();
+        const nextStat = new Date(nextStatYear, nextStatMonth, genDay);
+        const deadlineMonth = (nextStatMonth + 1) % 12;
+        const deadlineYear = nextStatMonth === 11 ? nextStatYear + 1 : nextStatYear;
+        const deadline = new Date(deadlineYear, deadlineMonth, payDay);
+        setForm((prev) => ({
+          ...prev, cardId, cardName: card?.cardName || "",
+          statementDate: nextStat.toISOString().split("T")[0],
+          paymentDeadline: deadline.toISOString().split("T")[0],
+        }));
+        return;
+      }
+    }
+    setForm((prev) => ({ ...prev, cardId, cardName: card?.cardName || "" }));
+  };
+
+  /** Find the previous month's payment for the same card (for MoM delta). */
+  const prevMonthPayment = (p: Payment) => {
+    const d = new Date(p.statementDate);
+    const prevY = d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear();
+    const prevM = (d.getMonth() + 11) % 12;
+    return payments.find((o) => {
+      if (o.cardId !== p.cardId || o.id === p.id) return false;
+      const od = new Date(o.statementDate);
+      return od.getFullYear() === prevY && od.getMonth() === prevM;
+    }) ?? null;
+  };
+
   const handleFileUpload = async (paymentId: string, file: File) => {
     setUploadingFor(paymentId);
     try {
@@ -293,6 +335,9 @@ const PaymentDetails = () => {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportPaymentsCSV(payments)}>
             <Download size={14} /> Export CSV
           </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportPaymentsWithTransactionsCSV(payments)}>
+            <Download size={14} /> Export Full
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={downloadPaymentsSample}>
             <FileDown size={14} /> Sample CSV
           </Button>
@@ -328,6 +373,27 @@ const PaymentDetails = () => {
           </Button>
         )}
       </div>
+
+      {/* Overdue Banner */}
+      {(() => {
+        const overdue = payments.filter(
+          (p) => p.paidAmount < p.paymentDue && p.paymentDeadline && new Date(p.paymentDeadline) < new Date()
+        );
+        if (overdue.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-start gap-3">
+            <AlertTriangle size={17} className="text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="text-body-sm font-semibold text-destructive">
+                {overdue.length} overdue payment{overdue.length !== 1 ? "s" : ""}
+              </p>
+              <p className="text-body-xs text-muted-foreground mt-0.5">
+                {overdue.map((p) => `${p.cardName} (${formatCurrency(p.paymentDue - p.paidAmount)})`).join(" · ")}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Mobile Card Layout */}
       <div className="block md:hidden space-y-4">
@@ -520,6 +586,19 @@ const PaymentDetails = () => {
                     <td className="px-4 py-3">
                       <Input type="number" value={p.paymentDue} className="h-8 w-[100px]"
                         onChange={(e) => { const u = { ...p, paymentDue: Number(e.target.value) }; updatePayment({ ...u, status: computeStatus(u) }); }} />
+                      {(() => {
+                        const prev = prevMonthPayment(p);
+                        if (!prev || prev.paymentDue === 0) return null;
+                        const delta = p.paymentDue - prev.paymentDue;
+                        const pct = Math.round((delta / prev.paymentDue) * 100);
+                        if (pct === 0) return null;
+                        return (
+                          <p className={`text-[10px] font-medium flex items-center gap-0.5 mt-0.5 ${delta > 0 ? "text-destructive" : "text-success"}`}>
+                            {delta > 0 ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                            {Math.abs(pct)}% vs prev
+                          </p>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <Input type="date" value={p.paymentDeadline} className="h-8 w-[150px] min-w-[150px]"
@@ -708,7 +787,7 @@ const PaymentDetails = () => {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label>Card *</Label>
-              <select value={form.cardId} onChange={(e) => { const card = cards.find((c) => c.id === e.target.value); setForm((prev) => ({ ...prev, cardId: e.target.value, cardName: card?.cardName || "" })); }}
+              <select value={form.cardId} onChange={(e) => handleCardSelectInModal(e.target.value)}
                 className="w-full h-10 rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
                 <option value="">Select card</option>
                 {cards.map((c) => <option key={c.id} value={c.id}>{c.cardName}</option>)}
@@ -718,6 +797,20 @@ const PaymentDetails = () => {
               <div className="space-y-2">
                 <Label>Statement Date *</Label>
                 <Input type="date" value={form.statementDate} onChange={(e) => setField("statementDate", e.target.value)} />
+                {form.statementDate && form.cardId && (() => {
+                  const card = cards.find((c) => c.id === form.cardId);
+                  if (!card) return null;
+                  const day = new Date(form.statementDate).getDate();
+                  if (day !== card.billGenerationDay) {
+                    return (
+                      <p className="text-[11px] text-warning flex items-center gap-1 mt-1">
+                        <AlertTriangle size={11} />
+                        Card bills on day {card.billGenerationDay}, not day {day}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               <div className="space-y-2">
                 <Label>Payment Deadline</Label>

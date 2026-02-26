@@ -228,6 +228,27 @@ export function exportPaymentsCSV(payments: Payment[]) {
   downloadFile(rows, `fintrack-payments-${today()}.csv`);
 }
 
+/** Export payments with all their transactions as a flat CSV (one row per transaction). */
+export function exportPaymentsWithTransactionsCSV(payments: Payment[]) {
+  const txnHeaders = ["Txn Date", "Txn Category", "Txn Amount", "Txn Remark"];
+  const allHeaders = [...PAYMENT_HEADERS, ...txnHeaders];
+  const rows: string[] = [allHeaders.join(",")];
+  payments.forEach((p) => {
+    const base: (string | number | null | undefined)[] = [
+      p.id, p.cardId, p.cardName, p.statementDate, p.paymentDue,
+      p.paymentDeadline, p.paymentPaidOn ?? "", p.paidAmount, p.status, p.notes,
+    ];
+    if (p.transactions && p.transactions.length > 0) {
+      p.transactions.forEach((t) => {
+        rows.push([...base, t.date, t.category, t.amount, t.remark ?? ""].map(escapeCsv).join(","));
+      });
+    } else {
+      rows.push([...base, "", "", "", ""].map(escapeCsv).join(","));
+    }
+  });
+  downloadFile(rows.join("\n"), `fintrack-payments-full-${today()}.csv`);
+}
+
 export function downloadPaymentsSample() {
   const rows = [
     PAYMENT_HEADERS.join(","),

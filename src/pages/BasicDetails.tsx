@@ -40,6 +40,7 @@ const BasicDetails = () => {
   const [editingCard, setEditingCard] = useState<CreditCard | null>(null);
   const [form, setForm] = useState<CreditCard>({ ...emptyCard, id: generateId() });
   const [bankFilter, setBankFilter] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   type CardSortField = "cardName" | "bank" | "ownedBy" | "cardStatus" | "cardLimit" | "topTarget" | "rewardPointsExpiryDays" | "billGenerationDay" | "billPaymentDate";
   const [sortField, setSortField] = useState<CardSortField>("cardName");
@@ -64,7 +65,8 @@ const BasicDetails = () => {
     const q = search.toLowerCase();
     const matchesSearch = !q || c.cardName.toLowerCase().includes(q) || c.bank.toLowerCase().includes(q) || c.ownedBy.toLowerCase().includes(q) || c.id.toLowerCase().includes(q);
     const matchesBank = !bankFilter || c.bank === bankFilter;
-    return matchesSearch && matchesBank;
+    const matchesStatus = showInactive || c.cardStatus === "Active";
+    return matchesSearch && matchesBank && matchesStatus;
   });
 
   const banks = [...new Set(cards.map((c) => c.bank))];
@@ -196,7 +198,9 @@ const BasicDetails = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-heading text-foreground">Basic Details</h1>
-          <p className="mt-1 text-body-sm text-muted-foreground">{cards.length} cards registered</p>
+          <p className="mt-1 text-body-sm text-muted-foreground">
+            {cards.filter((c) => c.cardStatus === "Active").length} active · {cards.length} total
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => exportCardsCSV(cards)}>
@@ -225,6 +229,14 @@ const BasicDetails = () => {
           <option value="">All Banks</option>
           {banks.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
+        <Button
+          variant={showInactive ? "default" : "outline"}
+          size="sm"
+          className="h-10 gap-1.5 shrink-0"
+          onClick={() => setShowInactive((v) => !v)}
+        >
+          {showInactive ? "All Cards" : "Active Only"}
+        </Button>
         {(search || bankFilter) && (
           <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setBankFilter(""); }}>
             <X size={14} className="mr-1" /> Clear
