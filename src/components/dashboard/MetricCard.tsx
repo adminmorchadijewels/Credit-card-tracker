@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
@@ -9,6 +9,7 @@ interface MetricCardProps {
   trendLabel?: string;
   icon: ReactNode;
   accent?: "primary" | "secondary" | "success" | "warning";
+  style?: CSSProperties;
 }
 
 const accentStyles = {
@@ -25,14 +26,15 @@ const iconBgStyles = {
   warning: "bg-warning/10 text-warning",
 };
 
-export const MetricCard = ({ title, value, trend, trendLabel, icon, accent = "primary" }: MetricCardProps) => {
+export const MetricCard = ({ title, value, trend, trendLabel, icon, accent = "primary", style }: MetricCardProps) => {
   const TrendIcon = trend && trend > 0 ? TrendingUp : trend && trend < 0 ? TrendingDown : Minus;
   const trendColor = trend && trend > 0 ? "text-success" : trend && trend < 0 ? "text-overdue" : "text-muted-foreground";
 
   return (
     <div
+      style={style}
       className={cn(
-        "h-full animate-fade-in rounded-xl border bg-gradient-to-br p-5 transition-shadow hover:shadow-lg",
+        "h-full animate-fade-in rounded-xl border bg-gradient-to-br p-5 transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] cursor-default select-none",
         accentStyles[accent]
       )}
     >
@@ -52,7 +54,7 @@ export const MetricCard = ({ title, value, trend, trendLabel, icon, accent = "pr
             )}
           </div>
         </div>
-        <div className={cn("rounded-xl p-3", iconBgStyles[accent])}>
+        <div className={cn("rounded-xl p-3 shrink-0", iconBgStyles[accent])}>
           {icon}
         </div>
       </div>

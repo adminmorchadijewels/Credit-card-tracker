@@ -352,26 +352,46 @@ const PaymentDetails = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search payments..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      <div className="space-y-2.5">
+        {/* Search + Card select */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Search payments..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+          <select value={cardFilter} onChange={(e) => setCardFilter(e.target.value)} className="h-10 w-full sm:w-auto rounded-full border border-input bg-card px-4 text-body-sm text-foreground">
+            <option value="">All Cards</option>
+            {cards.map((c) => <option key={c.id} value={c.id}>{c.cardName}</option>)}
+          </select>
+          {(search || statusFilter || cardFilter) && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter(""); setCardFilter(""); }}>
+              <X size={14} className="mr-1" /> Clear
+            </Button>
+          )}
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-10 w-full sm:w-auto rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
-          <option value="">All Status</option>
-          <option value="Paid">Paid</option>
-          <option value="Pending">Pending</option>
-          <option value="Overdue">Overdue</option>
-        </select>
-        <select value={cardFilter} onChange={(e) => setCardFilter(e.target.value)} className="h-10 w-full sm:w-auto rounded-lg border border-input bg-card px-3 text-body-sm text-foreground">
-          <option value="">All Cards</option>
-          {cards.map((c) => <option key={c.id} value={c.id}>{c.cardName}</option>)}
-        </select>
-        {(search || statusFilter || cardFilter) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter(""); setCardFilter(""); }}>
-            <X size={14} className="mr-1" /> Clear
-          </Button>
-        )}
+        {/* Status pill buttons */}
+        <div className="flex overflow-x-auto gap-2 scrollbar-hide pb-0.5">
+          {(["", "Paid", "Pending", "Overdue"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={[
+                "shrink-0 rounded-full border px-4 py-1.5 text-body-xs font-medium transition-all duration-150",
+                statusFilter === s
+                  ? s === "Paid"
+                    ? "bg-success text-success-foreground border-success shadow-sm"
+                    : s === "Pending"
+                    ? "bg-warning text-warning-foreground border-warning shadow-sm"
+                    : s === "Overdue"
+                    ? "bg-destructive text-destructive-foreground border-destructive shadow-sm"
+                    : "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-background border-input text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+              ].join(" ")}
+            >
+              {s === "" ? "All" : s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Overdue Banner */}
@@ -397,13 +417,18 @@ const PaymentDetails = () => {
 
       {/* Mobile Card Layout */}
       <div className="block md:hidden space-y-4">
-        {filtered.map((p) => {
+        {filtered.map((p, i) => {
           const displayStatus = computeStatus(p);
           const isExpanded = expandedPayment === p.id;
           const txns = p.transactions || [];
           const undefinedAmt = getUndefinedAmount(p);
+          const paidPct = p.paymentDue > 0 ? Math.min(100, (p.paidAmount / p.paymentDue) * 100) : 0;
           return (
-            <div key={p.id} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+            <div
+              key={p.id}
+              className="rounded-xl border border-border bg-card shadow-sm overflow-hidden animate-fade-in"
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
               <div className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -474,6 +499,16 @@ const PaymentDetails = () => {
                   )}
                   <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={() => openEdit(p)}><Pencil size={14} /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 size={14} /></Button>
+                </div>
+                {/* Pay progress bar */}
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={[
+                      "h-full rounded-full transition-all duration-500",
+                      displayStatus === "Paid" ? "bg-success" : displayStatus === "Overdue" ? "bg-destructive" : "bg-warning",
+                    ].join(" ")}
+                    style={{ width: `${paidPct}%` }}
+                  />
                 </div>
               </div>
               <button className="w-full flex items-center justify-center gap-1 py-2 text-body-xs text-muted-foreground border-t border-border hover:bg-muted/30 transition-colors"

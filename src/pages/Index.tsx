@@ -368,26 +368,31 @@ const Dashboard = () => {
   return (
     <div className="space-y-6 animate-fade-in">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-heading text-foreground">Dashboard</h1>
-          <p className="mt-1 text-body-sm text-muted-foreground">{fy.label} • Financial Overview</p>
+      {/* ── Hero band ──────────────────────────────────────────────────── */}
+      <div className="rounded-2xl bg-gradient-to-br from-primary/15 via-transparent to-secondary/10 border border-primary/10 px-5 py-6 sm:px-7 sm:py-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{fy.label}</p>
+            <p className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">{formatCurrency(totalSpend)}</p>
+            <p className="text-body-sm text-muted-foreground mt-1.5">
+              {payments.length} payment{payments.length !== 1 ? "s" : ""} tracked · {activeCards} active card{activeCards !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <select
+            value={selectedFYYear}
+            onChange={(e) => setSelectedFYYear(Number(e.target.value))}
+            className="h-10 rounded-lg border border-input bg-card/80 backdrop-blur-sm px-4 text-body-sm font-medium text-foreground shrink-0"
+          >
+            {fyOptions.map((opt) => (
+              <option key={opt.startYear} value={opt.startYear}>{opt.label}</option>
+            ))}
+          </select>
         </div>
-        <select
-          value={selectedFYYear}
-          onChange={(e) => setSelectedFYYear(Number(e.target.value))}
-          className="h-10 rounded-lg border border-input bg-card px-4 text-body-sm font-medium text-foreground shrink-0"
-        >
-          {fyOptions.map((opt) => (
-            <option key={opt.startYear} value={opt.startYear}>{opt.label}</option>
-          ))}
-        </select>
       </div>
 
       {/* ── KPI cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 xl:grid-cols-6">
-        {[
+      {(() => {
+        const kpiCards = [
           {
             title: "Total Spend",
             value: formatCurrency(totalSpend),
@@ -429,16 +434,26 @@ const Dashboard = () => {
             icon: <TrendingUp size={22} />,
             accent: "secondary" as const,
           },
-        ].map((card, i) => (
-          <div
-            key={card.title}
-            className="h-full animate-fade-in"
-            style={{ animationDelay: `${i * 80}ms` }}
-          >
-            <MetricCard {...card} />
-          </div>
-        ))}
-      </div>
+        ];
+        return (
+          <>
+            {/* Mobile: horizontal scroll-snap carousel */}
+            <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-1 -mx-4 px-4 scrollbar-hide sm:hidden">
+              {kpiCards.map((card, i) => (
+                <div key={card.title} className="snap-start shrink-0 w-[72vw]">
+                  <MetricCard {...card} style={{ animationDelay: `${i * 60}ms` }} />
+                </div>
+              ))}
+            </div>
+            {/* Desktop: grid */}
+            <div className="hidden sm:grid sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+              {kpiCards.map((card, i) => (
+                <MetricCard key={card.title} {...card} style={{ animationDelay: `${i * 60}ms` }} />
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Due This Week ──────────────────────────────────────────────── */}
       {dueThisWeek.length > 0 && (

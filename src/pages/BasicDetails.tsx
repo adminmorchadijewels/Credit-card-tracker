@@ -229,14 +229,26 @@ const BasicDetails = () => {
           <option value="">All Banks</option>
           {banks.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
-        <Button
-          variant={showInactive ? "default" : "outline"}
-          size="sm"
-          className="h-10 gap-1.5 shrink-0"
-          onClick={() => setShowInactive((v) => !v)}
-        >
-          {showInactive ? "All Cards" : "Active Only"}
-        </Button>
+        <div className="inline-flex shrink-0 items-center rounded-full border border-input bg-muted p-0.5 gap-0.5">
+          <button
+            onClick={() => setShowInactive(false)}
+            className={[
+              "rounded-full px-3 py-1.5 text-body-xs font-medium transition-all duration-200",
+              !showInactive ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setShowInactive(true)}
+            className={[
+              "rounded-full px-3 py-1.5 text-body-xs font-medium transition-all duration-200",
+              showInactive ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            All
+          </button>
+        </div>
         {(search || bankFilter) && (
           <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setBankFilter(""); }}>
             <X size={14} className="mr-1" /> Clear
