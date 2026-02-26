@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { useStore } from "@/data/store";
 import { CreditCard, TargetMilestone } from "@/types";
 import { formatCurrency, generateId } from "@/utils/formatters";
-import { Plus, Pencil, Trash2, Search, X, Download, Upload, FileDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Download, Upload, FileDown, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,13 @@ const BasicDetails = () => {
   const [form, setForm] = useState<CreditCard>({ ...emptyCard, id: generateId() });
   const [bankFilter, setBankFilter] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+  type CardSortField = "cardName" | "bank" | "ownedBy" | "cardStatus" | "cardLimit" | "topTarget" | "rewardPointsExpiryDays" | "billGenerationDay" | "billPaymentDate";
+  const [sortField, setSortField] = useState<CardSortField>("cardName");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const handleCardSort = (field: CardSortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+  };
 
   if (loading) {
     return (
@@ -162,6 +169,28 @@ const BasicDetails = () => {
     return formatCurrency(top.spend);
   };
 
+  const getTopTargetValue = (card: CreditCard) => {
+    const milestones = card.targetMilestones || [];
+    if (milestones.length === 0) return 0;
+    return milestones.reduce((max, m) => m.spend > max ? m.spend : max, 0);
+  };
+
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    let aVal: string | number;
+    let bVal: string | number;
+    if (sortField === "topTarget") {
+      aVal = getTopTargetValue(a);
+      bVal = getTopTargetValue(b);
+    } else {
+      aVal = a[sortField as keyof CreditCard] as string | number;
+      bVal = b[sortField as keyof CreditCard] as string | number;
+    }
+    if (typeof aVal === "string" && typeof bVal === "string") {
+      return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    }
+    return sortDir === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+  });
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -205,7 +234,7 @@ const BasicDetails = () => {
 
       {/* Mobile Card Layout */}
       <div className="block md:hidden space-y-4">
-        {filtered.map((card) => (
+        {sortedFiltered.map((card) => (
           <div key={card.id} className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
             <div className="flex items-start justify-between">
               <div>
@@ -244,7 +273,7 @@ const BasicDetails = () => {
             </div>
           </div>
         ))}
-        {filtered.length === 0 && (
+        {sortedFiltered.length === 0 && (
           <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">No cards found</div>
         )}
       </div>
@@ -254,13 +283,38 @@ const BasicDetails = () => {
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
-              {["Card ID", "Card Name", "Bank", "Owner", "Status", "Limit", "Top Target", "Expiry (days)", "Bill Gen Day", "Bill Pay Day", "Actions"].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+              {(
+                [
+                  { label: "Card ID", field: null },
+                  { label: "Card Name", field: "cardName" },
+                  { label: "Bank", field: "bank" },
+                  { label: "Owner", field: "ownedBy" },
+                  { label: "Status", field: "cardStatus" },
+                  { label: "Limit", field: "cardLimit" },
+                  { label: "Top Target", field: "topTarget" },
+                  { label: "Expiry (days)", field: "rewardPointsExpiryDays" },
+                  { label: "Bill Gen Day", field: "billGenerationDay" },
+                  { label: "Bill Pay Day", field: "billPaymentDate" },
+                  { label: "Actions", field: null },
+                ] as { label: string; field: CardSortField | null }[]
+              ).map(({ label, field }) => (
+                <th
+                  key={label}
+                  onClick={field ? () => handleCardSort(field) : undefined}
+                  className={`px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap ${field ? "cursor-pointer hover:text-foreground select-none" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {label}
+                    {field && sortField === field && (
+                      sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                    )}
+                  </span>
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((card) => (
+            {sortedFiltered.map((card) => (
               <tr key={card.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 font-mono text-body-xs">{card.id}</td>
                 <td className="px-4 py-3 font-medium">{card.cardName}</td>
@@ -288,7 +342,7 @@ const BasicDetails = () => {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {sortedFiltered.length === 0 && (
               <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">No cards found</td></tr>
             )}
           </tbody>

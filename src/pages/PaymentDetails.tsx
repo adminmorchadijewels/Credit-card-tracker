@@ -52,6 +52,13 @@ const PaymentDetails = () => {
   const [installModalPayment, setInstallModalPayment] = useState<Payment | null>(null);
   const [installForm, setInstallForm] = useState<{ date: string; amount: number; note: string }>({ date: "", amount: 0, note: "" });
   const [editingInstall, setEditingInstall] = useState<PaymentInstallment | null>(null);
+  type PaymentSortField = "cardName" | "statementDate" | "paymentDue" | "paymentDeadline" | "paymentPaidOn" | "paidAmount" | "status";
+  const [sortField, setSortField] = useState<PaymentSortField>("statementDate");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const handlePaymentSort = (field: PaymentSortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("asc"); }
+  };
 
   const [form, setForm] = useState<Payment>({
     id: generateId(), cardId: "", cardName: "",
@@ -82,7 +89,15 @@ const PaymentDetails = () => {
     const matchStatus = !statusFilter || computeStatus(p) === statusFilter;
     const matchCard = !cardFilter || p.cardId === cardFilter;
     return matchSearch && matchStatus && matchCard;
-  }).sort((a, b) => new Date(b.statementDate).getTime() - new Date(a.statementDate).getTime());
+  }).sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const aVal = (a[sortField] ?? "") as string | number;
+    const bVal = (b[sortField] ?? "") as string | number;
+    if (typeof aVal === "string" && typeof bVal === "string") {
+      return aVal.localeCompare(bVal) * dir;
+    }
+    return ((aVal as number) - (bVal as number)) * dir;
+  });
 
   function computeStatus(f: Payment): Payment["status"] {
     if (f.paidAmount > 0 && f.paidAmount >= f.paymentDue) return "Paid";
@@ -436,8 +451,33 @@ const PaymentDetails = () => {
         <table className="w-full text-body-sm">
           <thead>
             <tr className="border-b border-border bg-muted/50">
-              {["", "Card", "Statement", "Due Amount", "Deadline", "Paid On", "Paid Amount", "Status", "Statement File", "Notes", "Actions"].map((h) => (
-                <th key={h} className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+              {(
+                [
+                  { label: "", field: null },
+                  { label: "Card", field: "cardName" },
+                  { label: "Statement", field: "statementDate" },
+                  { label: "Due Amount", field: "paymentDue" },
+                  { label: "Deadline", field: "paymentDeadline" },
+                  { label: "Paid On", field: "paymentPaidOn" },
+                  { label: "Paid Amount", field: "paidAmount" },
+                  { label: "Status", field: "status" },
+                  { label: "Statement File", field: null },
+                  { label: "Notes", field: null },
+                  { label: "Actions", field: null },
+                ] as { label: string; field: PaymentSortField | null }[]
+              ).map(({ label, field }) => (
+                <th
+                  key={label}
+                  onClick={field ? () => handlePaymentSort(field) : undefined}
+                  className={`px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap ${field ? "cursor-pointer hover:text-foreground select-none" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {label}
+                    {field && sortField === field && (
+                      sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                    )}
+                  </span>
+                </th>
               ))}
             </tr>
           </thead>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useStore } from "@/data/store";
 import { formatCurrency } from "@/utils/formatters";
 import { getFinancialYearMonths } from "@/utils/dateHelpers";
@@ -117,16 +117,34 @@ const Dashboard = () => {
 
   // ── All hooks must be before any conditional return ──────────────────────
   const fyOptions = useMemo(() => getFYOptions(), []);
+
+  const readLS = <T,>(key: string, fallback: T): T => {
+    try {
+      const v = localStorage.getItem(key);
+      if (v !== null) return JSON.parse(v) as T;
+    } catch {}
+    return fallback;
+  };
+
   // Default: fyOptions[1] = current FY (fyOptions[0] is next/future FY)
-  const [selectedFYYear, setSelectedFYYear] = useState(() => fyOptions[1].startYear);
+  const [selectedFYYear, setSelectedFYYear] = useState<number>(() =>
+    readLS("cc-dash-fy", fyOptions[1].startYear)
+  );
 
   // Per-section multi-select filters (empty array = show all)
-  const [timelineFilter, setTimelineFilter] = useState<string[]>([]);
-  const [trendFilter, setTrendFilter] = useState<string[]>([]);
-  const [targetFilter, setTargetFilter] = useState<string[]>([]);
-  const [utilizationFilter, setUtilizationFilter] = useState<string[]>([]);
+  const [timelineFilter, setTimelineFilter] = useState<string[]>(() => readLS("cc-dash-timeline", []));
+  const [trendFilter, setTrendFilter] = useState<string[]>(() => readLS("cc-dash-trend", []));
+  const [targetFilter, setTargetFilter] = useState<string[]>(() => readLS("cc-dash-target", []));
+  const [utilizationFilter, setUtilizationFilter] = useState<string[]>(() => readLS("cc-dash-util", []));
   // Bank split: filter by card owner
-  const [bankOwnerFilter, setBankOwnerFilter] = useState<string[]>([]);
+  const [bankOwnerFilter, setBankOwnerFilter] = useState<string[]>(() => readLS("cc-dash-bankowner", []));
+
+  useEffect(() => { try { localStorage.setItem("cc-dash-fy", JSON.stringify(selectedFYYear)); } catch {} }, [selectedFYYear]);
+  useEffect(() => { try { localStorage.setItem("cc-dash-timeline", JSON.stringify(timelineFilter)); } catch {} }, [timelineFilter]);
+  useEffect(() => { try { localStorage.setItem("cc-dash-trend", JSON.stringify(trendFilter)); } catch {} }, [trendFilter]);
+  useEffect(() => { try { localStorage.setItem("cc-dash-target", JSON.stringify(targetFilter)); } catch {} }, [targetFilter]);
+  useEffect(() => { try { localStorage.setItem("cc-dash-util", JSON.stringify(utilizationFilter)); } catch {} }, [utilizationFilter]);
+  useEffect(() => { try { localStorage.setItem("cc-dash-bankowner", JSON.stringify(bankOwnerFilter)); } catch {} }, [bankOwnerFilter]);
 
   if (loading) {
     return (
