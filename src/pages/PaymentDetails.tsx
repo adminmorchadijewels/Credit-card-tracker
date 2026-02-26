@@ -475,7 +475,6 @@ const PaymentDetails = () => {
                   { label: "Paid Amount", field: "paidAmount" },
                   { label: "Status", field: "status" },
                   { label: "Statement File", field: null },
-                  { label: "Notes", field: null },
                   { label: "Actions", field: null },
                 ] as { label: string; field: PaymentSortField | null }[]
               ).map(({ label, field }) => (
@@ -563,10 +562,6 @@ const PaymentDetails = () => {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Input value={p.notes} className="h-8 w-[120px]" placeholder="—"
-                        onChange={(e) => updatePayment({ ...p, notes: e.target.value })} />
-                    </td>
-                    <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         <Button variant="outline" size="sm" className="h-8 text-body-xs gap-1" onClick={() => openInstallModal(p)}>
                           <Banknote size={13} />
@@ -593,7 +588,7 @@ const PaymentDetails = () => {
                   </tr>
                   {isExpanded && (
                     <tr key={`${p.id}-txns`} className="border-b border-border bg-muted/10">
-                      <td colSpan={11} className="px-8 py-4">
+                      <td colSpan={10} className="px-8 py-4">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-body-sm font-semibold text-foreground">Transactions</h4>
                           <div className="flex items-center gap-3">
@@ -685,7 +680,7 @@ const PaymentDetails = () => {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={11} className="py-12 text-center text-muted-foreground">No payments found</td></tr>
+              <tr><td colSpan={10} className="py-12 text-center text-muted-foreground">No payments found</td></tr>
             )}
           </tbody>
         </table>
