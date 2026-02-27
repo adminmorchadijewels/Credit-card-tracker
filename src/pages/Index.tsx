@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Legend,
+  PieChart, Pie, Cell, LineChart, Line, Legend, LabelList,
 } from "recharts";
 
 const CHART_COLORS = [
@@ -842,36 +842,59 @@ const Dashboard = () => {
               No cards selected
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {utilizationData.map((item, i) => (
-                <div
-                  key={item.name}
-                  className="rounded-lg border border-border bg-background p-4 hover:shadow-sm transition-all duration-200 hover:-translate-y-px"
-                >
-                  <p className="text-body-sm font-medium text-foreground truncate">{item.name}</p>
-                  <div className="mt-2.5 flex items-end gap-2">
-                    <span
-                      className="text-2xl font-bold"
-                      style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}
-                    >
-                      {item.utilization}%
-                    </span>
-                    <span className="mb-0.5 text-body-xs text-muted-foreground">
-                      avg / {formatCurrency(item.limit)}
-                    </span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${Math.min(item.utilization, 100)}%`,
-                        backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart
+                data={utilizationData}
+                margin={{ top: 22, right: 8, left: -22, bottom: 4 }}
+                barCategoryGap="35%"
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tickFormatter={(v: number) => `${v}%`}
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload as { name: string; utilization: number; limit: number };
+                    return (
+                      <div className="rounded-lg border border-border bg-card px-3 py-2 text-body-xs shadow-lg">
+                        <p className="font-medium text-foreground truncate max-w-[160px]">{d.name}</p>
+                        <p className="text-muted-foreground">
+                          Avg utilization:{" "}
+                          <span className="font-semibold text-foreground">{d.utilization}%</span>
+                        </p>
+                        <p className="text-muted-foreground">
+                          Limit:{" "}
+                          <span className="font-semibold text-foreground">{formatCurrency(d.limit)}</span>
+                        </p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="utilization" radius={[4, 4, 0, 0]} maxBarSize={64}>
+                  {utilizationData.map((_item, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                  <LabelList
+                    dataKey="utilization"
+                    position="top"
+                    formatter={(v: number) => `${v}%`}
+                    style={{ fontSize: 11, fontWeight: 600, fill: "hsl(var(--foreground))" }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </div>
 
