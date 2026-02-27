@@ -162,11 +162,13 @@ export function importCardsCSV(
     } catch { /* keep default */ }
 
     const idVal = get("Card ID");
+    const rawStatus = get("Status");
+    const cardStatus: "Active" | "Inactive" = rawStatus === "Inactive" ? "Inactive" : "Active";
     cards.push({
       id: idVal || crypto.randomUUID(),
       parentId: get("Parent ID"),
       cardName,
-      cardStatus: (get("Status") as "Active" | "Inactive") || "Active",
+      cardStatus,
       ownedBy: get("Owner"),
       bank,
       customerCare: get("Customer Care"),
@@ -297,9 +299,10 @@ export function importPaymentsCSV(
       paymentDeadline: normalizeDate(get("Deadline")),
       paymentPaidOn: normalizeDate(get("Paid On")) || null,
       paidAmount: Number(get("Paid Amount")) || 0,
-      status: (get("Status") as Payment["status"]) || "Pending",
+      status: (["Paid", "Pending", "Overdue"].includes(get("Status")) ? get("Status") : "Pending") as Payment["status"],
       notes: get("Notes"),
       transactions: [],
+      installments: [],
     });
   }
   return { payments, errors };

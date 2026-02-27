@@ -414,15 +414,15 @@ const BasicDetails = () => {
             </div>
             <div className="space-y-2">
               <Label>Card Limit (₹)</Label>
-              <Input type="number" value={form.cardLimit} onChange={(e) => setField("cardLimit", Number(e.target.value))} />
+              <Input type="number" min="0" value={form.cardLimit} onChange={(e) => setField("cardLimit", Number(e.target.value))} />
             </div>
             <div className="space-y-2">
               <Label>Reward Points Expiry (days)</Label>
-              <Input type="number" value={form.rewardPointsExpiryDays} onChange={(e) => setField("rewardPointsExpiryDays", Number(e.target.value))} placeholder="e.g. 365" />
+              <Input type="number" min="1" value={form.rewardPointsExpiryDays} onChange={(e) => setField("rewardPointsExpiryDays", Number(e.target.value))} placeholder="e.g. 365" />
             </div>
             <div className="space-y-2">
               <Label>Annual Charges (₹)</Label>
-              <Input type="number" value={form.annualCharges} onChange={(e) => setField("annualCharges", Number(e.target.value))} />
+              <Input type="number" min="0" value={form.annualCharges} onChange={(e) => setField("annualCharges", Number(e.target.value))} />
             </div>
             <div className="space-y-2">
               <Label>Bill Generation Day</Label>
@@ -457,7 +457,7 @@ const BasicDetails = () => {
                 <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
                   <div className="flex-1 space-y-1">
                     <Label className="text-body-xs">Spend (₹)</Label>
-                    <Input type="number" value={m.spend} onChange={(e) => updateMilestone(i, "spend", Number(e.target.value))} />
+                    <Input type="number" min="0" value={m.spend} onChange={(e) => updateMilestone(i, "spend", Number(e.target.value))} />
                   </div>
                   <div className="flex-[2] space-y-1">
                     <Label className="text-body-xs">Reward</Label>

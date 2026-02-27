@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, Fragment } from "react";
 import { useStore } from "@/data/store";
 import { Payment, PaymentInstallment, Transaction } from "@/types";
 import { formatCurrency, formatDate, generateId } from "@/utils/formatters";
@@ -85,11 +85,6 @@ const PaymentDetails = () => {
     );
   }
 
-  const emptyPayment: Payment = {
-    id: generateId(), cardId: cards[0]?.id || "", cardName: cards[0]?.cardName || "",
-    statementDate: "", paymentDue: 0, paymentDeadline: "", paymentPaidOn: null,
-    paidAmount: 0, status: "Pending", notes: "", transactions: [], installments: [],
-  };
 
   const filtered = payments.filter((p) => {
     const q = search.toLowerCase();
@@ -601,8 +596,8 @@ const PaymentDetails = () => {
               const txns = p.transactions || [];
               const undefinedAmt = getUndefinedAmount(p);
               return (
-                <>
-                  <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                <Fragment key={p.id}>
+                  <tr className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setExpandedPayment(isExpanded ? null : p.id)}>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -790,7 +785,7 @@ const PaymentDetails = () => {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
             {filtered.length === 0 && (
@@ -855,11 +850,11 @@ const PaymentDetails = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Payment Due (₹)</Label>
-                <Input type="number" value={form.paymentDue} onChange={(e) => setField("paymentDue", Number(e.target.value))} />
+                <Input type="number" min="0" value={form.paymentDue} onChange={(e) => setField("paymentDue", Number(e.target.value))} />
               </div>
               <div className="space-y-2">
                 <Label>Paid Amount (₹)</Label>
-                <Input type="number" value={form.paidAmount} onChange={(e) => setField("paidAmount", Number(e.target.value))} />
+                <Input type="number" min="0" value={form.paidAmount} onChange={(e) => setField("paidAmount", Number(e.target.value))} />
               </div>
             </div>
             <div className="space-y-2">
@@ -900,7 +895,7 @@ const PaymentDetails = () => {
             </div>
             <div className="space-y-2">
               <Label>Amount (₹) *</Label>
-              <Input type="number" value={txnForm.amount} onChange={(e) => setTxnForm((prev) => ({ ...prev, amount: Number(e.target.value) }))} />
+              <Input type="number" min="0" value={txnForm.amount} onChange={(e) => setTxnForm((prev) => ({ ...prev, amount: Number(e.target.value) }))} />
             </div>
             <div className="space-y-2">
               <Label>Remark</Label>
@@ -1012,7 +1007,7 @@ const PaymentDetails = () => {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-body-xs">Amount (₹) *</Label>
-                    <Input type="number" value={installForm.amount || ""}
+                    <Input type="number" min="0" value={installForm.amount || ""}
                       onChange={(e) => setInstallForm((f) => ({ ...f, amount: Number(e.target.value) }))} className="h-8" />
                   </div>
                 </div>

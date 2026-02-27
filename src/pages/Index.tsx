@@ -172,22 +172,24 @@ const Dashboard = () => {
   const totalPaid = fyPayments.reduce((s, p) => s + p.paidAmount, 0);
   const activeCards = activeCardsList.length;
   const missedPayments = fyPayments.filter((p) => {
-    const status =
-      p.paidAmount >= p.paymentDue
-        ? "Paid"
-        : p.paymentDeadline && new Date(p.paymentDeadline) < now
-        ? "Overdue"
-        : "Pending";
-    return status === "Overdue";
+    // Match PaymentDetails computeStatus: require paidAmount > 0 to count as Paid
+    if (p.paidAmount > 0 && p.paidAmount >= p.paymentDue) return false;
+    return !!(p.paymentDeadline && new Date(p.paymentDeadline) < now);
   }).length;
+  // Average utilization: per-statement average across active cards (consistent with utilization section)
   const avgUtilization =
     activeCardsList.length > 0
       ? Math.round(
           activeCardsList.reduce((sum, card) => {
-            const cardSpend = fyPayments
-              .filter((p) => p.cardId === card.id)
-              .reduce((s, p) => s + p.paymentDue, 0);
-            return sum + (card.cardLimit > 0 ? (cardSpend / card.cardLimit) * 100 : 0);
+            const cardPayments = fyPayments.filter((p) => p.cardId === card.id);
+            const util =
+              cardPayments.length > 0
+                ? cardPayments.reduce(
+                    (s, p) => s + (card.cardLimit > 0 ? (p.paymentDue / card.cardLimit) * 100 : 0),
+                    0
+                  ) / cardPayments.length
+                : 0;
+            return sum + util;
           }, 0) / activeCardsList.length
         )
       : 0;

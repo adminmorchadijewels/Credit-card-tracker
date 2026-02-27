@@ -212,6 +212,11 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         );
       } catch (err: unknown) {
         console.error("Failed to load data from Supabase:", err);
+        toast({
+          title: "Failed to load data",
+          description: err instanceof Error ? err.message : "Please refresh the page and try again.",
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }

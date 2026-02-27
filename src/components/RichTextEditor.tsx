@@ -30,7 +30,7 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
     if (editor && value !== editor.getHTML()) {
       editor.commands.setContent(value);
     }
-  }, [value]);
+  }, [editor, value]);
 
   if (!editor) return null;
 

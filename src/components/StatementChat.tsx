@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, KeyboardEvent } from "react";
+import { useState, useEffect, useRef, useCallback, KeyboardEvent } from "react";
 import { Payment } from "@/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -40,13 +40,13 @@ export const StatementChat = ({ payment, onClose }: Props) => {
 
   useEffect(() => {
     checkIndexed();
-  }, [payment.id]);
+  }, [checkIndexed]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const checkIndexed = async () => {
+  const checkIndexed = useCallback(async () => {
     setCheckingIndex(true);
     const { count } = await supabase
       .from("statement_chunks")
@@ -54,7 +54,7 @@ export const StatementChat = ({ payment, onClose }: Props) => {
       .eq("payment_id", payment.id);
     setIsIndexed((count ?? 0) > 0);
     setCheckingIndex(false);
-  };
+  }, [payment.id]);
 
   const handleIndex = async (reindex = false) => {
     if (!payment.statementFileUrl) {
