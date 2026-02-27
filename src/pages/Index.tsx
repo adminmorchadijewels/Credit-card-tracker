@@ -340,7 +340,7 @@ const Dashboard = () => {
           )
         : 0;
     return { name: card.cardName, utilization: avgUtil, limit: card.cardLimit };
-  });
+  }).sort((a, b) => b.utilization - a.utilization).slice(0, 10);
 
   // ── Statement timeline filtered ───────────────────────────────────────────
   const timelineCards =
